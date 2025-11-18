@@ -21,13 +21,13 @@ param logAnalyticsWorkspaceName string
 @minLength(1)
 param existingWebApplicationInsightsResourceName string
 
-@description('The name of the existing Azure AI Foundry instance that the Azure Web App code will be calling for Foundry Agent Service agents.')
+@description('The name of the existing Microsoft Foundry instance that the Azure Web App code will be calling for Foundry Agent Service agents.')
 @minLength(2)
-param existingAzureAiFoundryResourceName string
+param existingFoundryResourceName string
 
-@description('The name of the existing Azure AI Foundry project name.')
+@description('The name of the existing Foundry project name.')
 @minLength(2)
-param existingAzureAiFoundryProjectName string
+param existingFoundryProjectName string
 
 // variables
 var appName = 'app-${baseName}'
@@ -49,12 +49,12 @@ resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' ex
   scope: subscription()
 }
 
-@description('Existing Azure AI Foundry account. This account is where the agents hosted in Foundry Agent Service will be deployed. The web app code calls to these agents.')
-resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
-  name: existingAzureAiFoundryResourceName
+@description('Existing Foundry account. This account is where the agents hosted in Foundry Agent Service will be deployed. The web app code calls to these agents.')
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+  name: existingFoundryResourceName
 
   resource project 'projects' existing = {
-    name: existingAzureAiFoundryProjectName
+    name: existingFoundryProjectName
    }
 }
 
@@ -66,10 +66,10 @@ resource appServiceManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdenti
   location: location
 }
 
-@description('Grant the App Service managed identity Azure AI user role permission so it can call into the Azure AI Foundry-hosted agent.')
+@description('Grant the App Service managed identity Azure AI user role permission so it can call into the Foundry-hosted agent.')
 resource azureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: aiFoundry
-  name: guid(aiFoundry.id, appServiceManagedIdentity.id, azureAiUserRole.id)
+  scope: foundry
+  name: guid(foundry.id, appServiceManagedIdentity.id, azureAiUserRole.id)
   properties: {
     roleDefinitionId: azureAiUserRole.id
     principalType: 'ServicePrincipal'
@@ -140,7 +140,7 @@ resource webApp 'Microsoft.Web/sites@2024-04-01' = {
       APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights.properties.ConnectionString
       AZURE_CLIENT_ID: appServiceManagedIdentity.properties.clientId
       ApplicationInsightsAgent_EXTENSION_VERSION: '~3'
-      AIProjectEndpoint: aiFoundry::project.properties.endpoints['AI Foundry API']
+      AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
       AIAgentId: 'Not yet set' // Will be set once the agent is created
       XDT_MicrosoftApplicationInsights_Mode: 'Recommended'
     }

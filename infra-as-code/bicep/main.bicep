@@ -9,7 +9,7 @@ param location string = resourceGroup().location
 @maxLength(8)
 param baseName string
 
-@description('Assign your user some roles to support fluid access when working in the Azure AI Foundry portal and its dependencies.')
+@description('Assign your user some roles to support fluid access when working in the Foundry portal and its dependencies.')
 @maxLength(36)
 @minLength(36)
 param yourPrincipalId string
@@ -40,33 +40,33 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
   }
 }
 
-// Deploy the Azure AI Foundry account and Azure AI Foundry Agent service components.
+// Deploy the Microsoft Foundry account and Foundry Agent Service components.
 
-@description('Deploy Azure AI Foundry with Azure AI Foundry Agent capability. No projects yet deployed.')
-module deployAzureAIFoundry 'ai-foundry.bicep' = {
+@description('Deploy Microsoft Foundry with Foundry Agent Service capability. No projects yet deployed.')
+module deployFoundry 'ai-foundry.bicep' = {
   scope: resourceGroup()
-  name: 'aiFoundryDeploy'
+  name: 'foundryDeploy'
   params: {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
-    aiFoundryPortalUserPrincipalId: yourPrincipalId
+    foundryPortalUserPrincipalId: yourPrincipalId
   }
 }
 
-@description('Deploy the Bing account for Internet grounding data to be used by agents in the Azure AI Foundry Agent Service.')
+@description('Deploy the Bing account for Internet grounding data to be used by agents in the Foundry Agent Service.')
 module deployBingAccount 'bing-grounding.bicep' = {
   scope: resourceGroup()
   name: 'bingAccountDeploy'
 }
 
-@description('Deploy the Azure AI Foundry project into the AI Foundry account. This is the project is the home of the Foundry Agent Service.')
-module deployAzureAiFoundryProject 'ai-foundry-project.bicep' = {
+@description('Deploy the Foundry project into the Foundry account. This is the project is the home of the Foundry Agent Service.')
+module deployFoundryProject 'ai-foundry-project.bicep' = {
   scope: resourceGroup()
-  name: 'aiFoundryProjectDeploy'
+  name: 'foundryProjectDeploy'
   params: {
     location: location
-    existingAiFoundryName: deployAzureAIFoundry.outputs.aiFoundryName
+    existingFoundryName: deployFoundry.outputs.foundryName
     existingBingAccountName: deployBingAccount.outputs.bingAccountName
     existingWebApplicationInsightsResourceName: deployApplicationInsights.outputs.applicationInsightsName
   }
@@ -74,7 +74,7 @@ module deployAzureAiFoundryProject 'ai-foundry-project.bicep' = {
 
 // Deploy the Azure Web App resources for the chat UI.
 
-@description('Deploy Application Insights. Used by the Azure Web App to monitor the deployed application and connected to the Azure AI Foundry project.')
+@description('Deploy Application Insights. Used by the Azure Web App to monitor the deployed application and connected to the Foundry project.')
 module deployApplicationInsights 'application-insights.bicep' = {
   scope: resourceGroup()
   name: 'applicationInsightsDeploy'
@@ -85,7 +85,7 @@ module deployApplicationInsights 'application-insights.bicep' = {
   }
 }
 
-@description('Deploy the web app for the front end demo UI. The web application will call into the Azure AI Foundry Agent Service.')
+@description('Deploy the web app for the front end demo UI. The web application will call into the Foundry Agent Service.')
 module deployWebApp 'web-app.bicep' = {
   scope: resourceGroup()
   name: 'webAppDeploy'
@@ -94,8 +94,8 @@ module deployWebApp 'web-app.bicep' = {
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     existingWebApplicationInsightsResourceName: deployApplicationInsights.outputs.applicationInsightsName
-    existingAzureAiFoundryResourceName: deployAzureAIFoundry.outputs.aiFoundryName
-    existingAzureAiFoundryProjectName: deployAzureAiFoundryProject.outputs.aiAgentProjectName
+    existingFoundryResourceName: deployFoundry.outputs.foundryName
+    existingFoundryProjectName: deployFoundryProject.outputs.aiAgentProjectName
   }
 }
 

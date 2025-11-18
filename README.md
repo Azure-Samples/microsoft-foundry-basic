@@ -1,24 +1,24 @@
-# Azure AI Foundry Agent service chat basic reference implementation
+# Foundry Agent Service chat basic reference implementation
 
-This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Azure AI Foundry Agent service as the orchestrator and Azure OpenAI foundation models. This repository directly supports the [Basic end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/basic-openai-e2e-chat) on Microsoft Learn.
+This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Foundry Agent Service as the orchestrator and Azure OpenAI foundation models. This repository directly supports the [Basic end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/basic-openai-e2e-chat) on Microsoft Learn.
 
-The reference implementation illustrates a basic example of a chat application. For a reference implementation that implements more enterprise requirements, please see the [Azure AI Foundry Agent service end-to-end baseline reference implementation](https://github.com/Azure-Samples/openai-end-to-end-baseline). That implementation addresses many of the [production readiness changes](https://github.com/search?q=repo%3AAzure-Samples%2Fopenai-end-to-end-basic+%22Production+readiness+change%22&type=code) identified in this code.
+The reference implementation illustrates a basic example of a chat application. For a reference implementation that implements more enterprise requirements, please see the [Microsoft Foundry Agent Service baseline reference implementation](https://github.com/Azure-Samples/openai-end-to-end-baseline). That implementation addresses many of the [production readiness changes](https://github.com/search?q=repo%3AAzure-Samples%2Fopenai-end-to-end-basic+%22Production+readiness+change%22&type=code) identified in this code.
 
 ## Architecture
 
 The implementation covers the following scenarios:
 
-- [Setting up Azure AI Foundry to host agents](#setting-up-azure-ai-foundry-to-host-agents)
-- [Deploying an agent into Azure AI Foundry Agent service](#deploying-an-agent-into-azure-ai-agent-service)
+- [Setting up Microsoft Foundry to host agents](#setting-up-microsoft-foundry-to-host-agents)
+- [Deploying an agent into Foundry Agent Service](#deploying-an-agent-into-foundry-agent-service)
 - [Invoking the agent from .NET code hosted in an Azure Web App](#invoking-the-agent-from-net-code-hosted-in-an-azure-web-app)
 
-### Setting up Azure AI Foundry to host agents
+### Setting up Microsoft Foundry to host agents
 
-Azure AI Foundry hosts Azure AI Foundry Agent service as a capability. Foundry Agent Service's REST APIs are exposed as an internet facing endpoint.
+Microsoft Foundry hosts the Foundry Agent Service as a capability. Foundry Agent Service's REST APIs are exposed as an internet facing endpoint.
 
-![Diagram that shows a basic end-to-end chat architecture.](docs/media/openai-end-to-end-basic.svg)
+![Diagram that shows a basic chat architecture.](docs/media/basic-architecture.svg)
 
-*Download a [Visio file](docs/media/openai-end-to-end-basic.vsdx) of this architecture.*
+*Download a [Visio file](docs/media/basic-architecture.vsdx) of this architecture.*
 
 #### Workflow
 
@@ -26,20 +26,20 @@ The following workflow corresponds to the previous diagram:
 
 1. An application user interacts with a web application that contains chat functionality. They issue an HTTPS request to the App Service default domain on azurewebsites.net. This domain automatically points to the App Service built-in public IP address. The Transport Layer Security connection is established from the client directly to App Service. Azure fully manages the certificate.
 1. The App Service feature called Easy Auth ensures that the user who accesses the website is authenticated via Microsoft Entra ID.
-1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an Azure AI agent in Azure AI Foundry by using the Azure AI Persistent Agents SDK.
-1. Azure AI Foundry Agent Service connects to Azure AI Search to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
-1. Foundry Agent Service connects to an Azure OpenAI model that's deployed in Azure AI Foundry and sends the prompt that includes the relevant grounding data and chat context.
+1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an agent in Microsoft Foundry by using the Azure AI Persistent Agents SDK.
+1. Foundry Agent Service connects to Azure AI Search to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
+1. Foundry Agent Service connects to an Azure OpenAI model that's deployed in Foundry and sends the prompt that includes the relevant grounding data and chat context.
 1. Application Insights logs information about the original request to App Service and the call agent interactions.
 
-### Deploying an agent into Azure AI Foundry Agent service
+### Deploying an agent into Foundry Agent Service
 
-Agents can be created via the Azure AI Foundry portal, [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
+Agents can be created via the Foundry portal, [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
 
 Ideally agents should be source-controlled and a versioned asset. You then can deploy agents in a coordinated way with the rest of your workload's code. In this deployment guide, you'll create an agent through the REST API to simulate a deployment pipeline which could have created the agent.
 
 ### Invoking the agent from .NET code hosted in an Azure Web App
 
-A chat UI application is deployed into Azure App Service. The .NET code uses the [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent) to connect to the workload's agent. The endpoint for the agent is exposed over internet through the Azure AI Foundry.
+A chat UI application is deployed into Azure App Service. The .NET code uses the [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent) to connect to the workload's agent. The endpoint for the agent is exposed over internet through Foundry.
 
 ## Deployment guide
 
@@ -78,8 +78,8 @@ The following steps are required to deploy the infrastructure from the command l
 1. In your shell, clone this repo and navigate to the root directory of this repository.
 
    ```bash
-   git clone https://github.com/Azure-Samples/openai-end-to-end-basic
-   cd openai-end-to-end-basic
+   git clone https://github.com/Azure-Samples/microsoft-foundry-basic
+   cd microsoft-foundry-basic
    ```
 
 1. Log in and set your target subscription.
@@ -120,15 +120,15 @@ The following steps are required to deploy the infrastructure from the command l
      -p yourPrincipalId=$PRINCIPAL_ID
    ```
 
-### 2. Deploy an agent in the Azure AI Foundry Agent service
+### 2. Deploy an agent in the Foundry Agent Service
 
-To test this scenario, you'll be deploying an AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Azure AI Foundry. In this architecture, you will interact with the Azure AI Foundry portal and its resources over internet.
+To test this scenario, you'll be deploying an AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over internet.
 
 1. Open the Azure portal to your subscription.
 
-1. Navigate to the Azure AI Foundry project named **projchat** in your resource group and open the Azure AI Foundry portal by clicking the Go to **Azure AI Foundry portal** button.
+1. Navigate to the Foundry project named **projchat** in your resource group and open the Foundry portal by clicking the Go to **Microsoft Foundry portal** button.
 
-   This will take you directly into the 'Chat project'. Alternatively, you can find all your AI Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
+   This will take you directly into the 'Chat project'. Alternatively, you can find all your Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
 
 1. Click **Agents** in the side navigation.
 
@@ -142,9 +142,9 @@ To test this scenario, you'll be deploying an AI agent. The agent uses a GPT mod
 
 1. Then choose the existing connection named 'bingaiagent' and click the **Connect** button.
 
-### 3. Test the agent from the Azure AI Foundry portal in the playground.
+### 3. Test the agent from the Foundry portal in the playground
 
-Here you'll test your orchestration agent by invoking it directly from the Azure AI Foundry portal's playground experience.
+Here you'll test your orchestration agent by invoking it directly from the Foundry portal's playground experience.
 
 1. Click the **Try in playground** button.
 
@@ -154,24 +154,24 @@ Here you'll test your orchestration agent by invoking it directly from the Azure
 
 ### 4. Publish the chat front-end web app
 
-Workloads build chat functionality into an application. Those interfaces usually call Azure AI Foundry project endpoint invoking a particular agent. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
+Workloads build chat functionality into an application. Those interfaces usually call Foundry project endpoint invoking a particular agent. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
 
 1. Generate some variables to set context.
 
    *The following variables align with the defaults in this deployment. Update them if you customized anything.*
 
    ```bash
-   AI_FOUNDRY_NAME="aif${BASE_NAME}"
-   AI_FOUNDRY_PROJECT_NAME="projchat"
-   AI_FOUNDRY_AGENT_CREATE_URL="https://${AI_FOUNDRY_NAME}.services.ai.azure.com/api/projects/${AI_FOUNDRY_PROJECT_NAME}/assistants?api-version=2025-05-15-preview"
+   FOUNDRY_NAME="aif${BASE_NAME}"
+   FOUNDRY_PROJECT_NAME="projchat"
+   FOUNDRY_AGENT_CREATE_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/assistants?api-version=2025-05-15-preview"
 
-   echo $AI_FOUNDRY_AGENT_CREATE_URL
+   echo $FOUNDRY_AGENT_CREATE_URL
    ```
 
 1. Get Agent ID value.
 
    ```bash
-   AGENT_ID=$(az rest -u $AI_FOUNDRY_AGENT_CREATE_URL -m "get" --resource "https://ai.azure.com" --query 'data[0].id' -o tsv)
+   AGENT_ID=$(az rest -u $FOUNDRY_AGENT_CREATE_URL -m "get" --resource "https://ai.azure.com" --query 'data[0].id' -o tsv)
 
    echo $AGENT_ID
    ````
@@ -187,12 +187,12 @@ Workloads build chat functionality into an application. Those interfaces usually
 1. Deploy the ChatUI web app
 
    ```bash
-   az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-url https://github.com/Azure-Samples/openai-end-to-end-basic/raw/refs/heads/main/website/chatui.zip
+   az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-url https://github.com/Azure-Samples/microsoft-foundry-basic/raw/refs/heads/main/website/chatui.zip
    ```
 
 > Sometimes the prior command will fail with a `GatewayTimeout`. If you receive that error, you're safe to simply execute the command again.
 
-### 5. Try it out! Test the deployed application that calls into the Azure AI Foundry Agent service
+### 5. Try it out! Test the deployed application that calls into the Foundry Agent Service
 
 After the deployment is complete, you can try the deployed application by navigating to the Web App's URL in a web browser.
 
