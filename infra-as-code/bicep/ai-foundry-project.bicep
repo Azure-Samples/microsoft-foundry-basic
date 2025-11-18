@@ -4,11 +4,11 @@ targetScope = 'resourceGroup'
 @minLength(1)
 param location string = resourceGroup().location
 
-@description('The existing Azure AI Foundry account. This project will become a child resource of this account.')
+@description('The existing Microsoft Foundry account. This project will become a child resource of this account.')
 @minLength(2)
-param existingAiFoundryName string
+param existingFoundryName string
 
-@description('The existing Bing grounding data account that is available to Azure AI Foundry Agent agents in this project.')
+@description('The existing Bing grounding data account that is available to Foundry agents in this project.')
 @minLength(1)
 param existingBingAccountName string
 
@@ -29,9 +29,9 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 
 // ---- New resources ----
 
-@description('Existing Azure AI Foundry account. The project will be created as a child resource of this account.')
-resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
-  name: existingAiFoundryName
+@description('Existing Microsoft Foundry account. The project will be created as a child resource of this account.')
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
+  name: existingFoundryName
 
   resource project 'projects' = {
     name: 'projchat'
@@ -40,7 +40,7 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  =
       type: 'SystemAssigned'
     }
     properties: {
-      description: 'Chat using internet data in your Azure AI Foundry Agent.'
+      description: 'Chat using internet data in your Foundry agent.'
       displayName: 'Chat with Internet Data'
     }
 
@@ -90,4 +90,4 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  =
 
 // ---- Outputs ----
 
-output aiAgentProjectName string = aiFoundry::project.name
+output aiAgentProjectName string = foundry::project.name
