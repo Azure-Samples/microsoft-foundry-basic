@@ -130,9 +130,9 @@ To test this scenario, you'll be deploying an AI agent. The agent uses a GPT mod
 
    This will take you directly into the 'Chat project'. Alternatively, you can find all your Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
 
-1. Click **Agents** in the side navigation.
+1. In the top-right corner, click **Build**. This opens by default the **Agents** blade in the side navigation, where you can view the available agents and create new ones.
 
-1. Click **+ New agent** button.
+   First time you access this section, the **Agents** list should be empty.
 
 1. From the Setup panel, change the Agent name to 'Baseline Chatbot Agent'.
 
