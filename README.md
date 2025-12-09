@@ -138,7 +138,7 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 1. From the Create an agent popup, enter 'baseline-chatbot-agent' as the Agent name.
 
-1. From the Setup panel, select the available deployment model named **agent-model**.
+1. From the Playground panel, select the available deployment model named **agent-model**.
 
 1. Expand the Knowledge section, and click **Add** button.
 
@@ -150,7 +150,7 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 1. From the 'Grounding with Bing Search connection' drop down list choose the existing connection named 'bingaiagent', and click the **Add** button.
 
-1. Click **Save** buton at the top right of the Agents setup panel.
+1. Click **Save** buton at the top-right of the Agents' Playground panel.
 
 ### 3. Test the agent from the Foundry portal in the playground
 
