@@ -122,7 +122,7 @@ The following steps are required to deploy the infrastructure from the command l
 
 ### 2. Deploy an agent in the Foundry Agent Service
 
-To test this scenario, you'll be deploying an AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over internet.
+To test this scenario, you'll be deploying an AI prompt based agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over internet.
 
 1. Open the Azure portal to your subscription.
 
