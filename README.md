@@ -154,7 +154,7 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 ### 3. Test the agent from the Foundry portal in the playground
 
-Here you'll test your orchestration agent by invoking it directly from the Foundry portal's playground experience.
+Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent's playground chat experience.
 
 1. Click the **Try in playground** button.
 
