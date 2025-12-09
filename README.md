@@ -150,6 +150,8 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 1. From the 'Grounding with Bing Search connection' drop down list choose the existing connection named 'bingaiagent', and click the **Add** button.
 
+1. Click **Save** buton at the top right of the Agents setup panel.
+
 ### 3. Test the agent from the Foundry portal in the playground
 
 Here you'll test your orchestration agent by invoking it directly from the Foundry portal's playground experience.
