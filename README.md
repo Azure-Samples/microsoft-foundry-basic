@@ -138,11 +138,17 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 1. From the Create an agent popup, enter 'baseline-chatbot-agent' as the Agent name.
 
-1. Click **+ Add** button in the Knowledge section.
+1. From the Setup panel, select the available deployment model named **agent-model**.
+
+1. Expand the Knowledge section, and click **Add** button.
+
+1. From the drop down list select the option **+ Set up a data source via tools**.
 
 1. From the popup window select the knowledge type 'Grounding with Bing Search'.
 
-1. Then choose the existing connection named 'bingaiagent' and click the **Connect** button.
+1. Click **Add tool**.
+
+1. From the 'Grounding with Bing Search connection' drop down list choose the existing connection named 'bingaiagent', and click the **Add** button.
 
 ### 3. Test the agent from the Foundry portal in the playground
 
