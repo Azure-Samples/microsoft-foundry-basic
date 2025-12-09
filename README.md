@@ -134,7 +134,7 @@ To test this scenario, you'll be deploying an AI agent. The agent uses a GPT mod
 
    First time you access this section, the **Agents** list should be empty.
 
-1. From the Setup panel, change the Agent name to 'Baseline Chatbot Agent'.
+1. Click **Create agent** button.
 
 1. Click **+ Add** button in the Knowledge section.
 
