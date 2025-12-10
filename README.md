@@ -130,6 +130,8 @@ To test this scenario, you'll be deploying a prompt-based AI agent. The agent us
 
    This will take you directly into the 'Chat project'. Alternatively, you can find all your Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
 
+1. In the upper-right corner, toggle **New Foundry** to switch into the Microsoft Foundry (new) portal.
+
 1. In the top-right corner, click **Build**. This opens by default the **Agents** blade in the side navigation, where you can view the available agents and create new ones.
 
    The first time you access this section, the **Agents** list should be empty.
