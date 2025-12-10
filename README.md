@@ -122,7 +122,7 @@ The following steps are required to deploy the infrastructure from the command l
 
 ### 2. Deploy an agent in the Foundry Agent Service
 
-To test this scenario, you'll be deploying an AI prompt based agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over internet.
+To test this scenario, you'll be deploying a prompt-based AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over the internet.
 
 1. Open the Azure portal to your subscription.
 
@@ -132,7 +132,7 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 1. In the top-right corner, click **Build**. This opens by default the **Agents** blade in the side navigation, where you can view the available agents and create new ones.
 
-   First time you access this section, the **Agents** list should be empty.
+   The first time you access this section, the **Agents** list should be empty.
 
 1. Click **Create agent** button.
 
@@ -154,15 +154,15 @@ To test this scenario, you'll be deploying an AI prompt based agent. The agent u
 
 ### 3. Test the agent from the Foundry portal in the playground
 
-Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent's playground chat experience.
+Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent playground chat experience.
 
-1. Select the prompt based agent you just saved from the previous step named 'baseline-chatbot-agent'.
+1. Select the agent you just saved from the previous step named 'baseline-chatbot-agent'.
 
 1. You are back into the agent Playground panel.
 
 1. Set the focus on the input field in the bottom-right of the Chat panel, the one with the placeholder 'Message to the agent…'.
 
-1. Enter a question that would require grounding data through recent internet content, such as a notable recent event or the weather today in your location.
+1. Enter a question to the agent that would require grounding data through recent internet content, such as a notable recent event or the weather today in your location.
 
 1. A grounded response to your question should appear on the UI.
 
