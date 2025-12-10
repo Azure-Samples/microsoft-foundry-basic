@@ -158,10 +158,6 @@ Here you'll test your orchestration agent by invoking it directly from the Found
 
 1. Select the agent you just saved from the previous step named 'baseline-chatbot-agent'.
 
-1. You are back into the agent Playground panel.
-
-1. Set the focus on the input field in the bottom-right of the Chat panel, the one with the placeholder 'Message to the agent…'.
-
 1. Enter a question to the agent that would require grounding data through recent internet content, such as a notable recent event or the weather today in your location.
 
 1. A grounded response to your question should appear on the UI.
