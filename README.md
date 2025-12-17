@@ -181,15 +181,15 @@ Workloads build chat functionality into an application. Those interfaces usually
    ```bash
    FOUNDRY_NAME="aif${BASE_NAME}"
    FOUNDRY_PROJECT_NAME="projchat"
-   FOUNDRY_AGENT_CREATE_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/assistants?api-version=2025-05-15-preview"
+   FOUNDRY_AGENTS_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/agents?api-version=2025-11-15-preview"
 
-   echo $FOUNDRY_AGENT_CREATE_URL
+   echo $FOUNDRY_AGENTS_URL
    ```
 
 1. Get Agent ID value.
 
    ```bash
-   AGENT_ID=$(az rest -u $FOUNDRY_AGENT_CREATE_URL -m "get" --resource "https://ai.azure.com" --query 'data[0].id' -o tsv)
+   AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query 'data[0].id' -o tsv)
 
    echo $AGENT_ID
    ````
