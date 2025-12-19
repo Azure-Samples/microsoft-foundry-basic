@@ -189,7 +189,7 @@ Workloads build chat functionality into an application. Those interfaces usually
 1. Get Agent ID value.
 
    ```bash
-   AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query 'data[0].id' -o tsv)
+   AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query last_id -o tsv)
 
    echo $AGENT_ID
    ````
