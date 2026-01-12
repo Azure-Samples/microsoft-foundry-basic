@@ -19,7 +19,7 @@ public class ChatController(
     private readonly IOptionsMonitor<ChatApiOptions> _options = options;
     private readonly ILogger<ChatController> _logger = logger;
 
-    // TODO: [security] Do not trust client to provide conversationId. Instead map current user to their active converstaionid in your application's own state store.
+    // TODO: [security] Do not trust client to provide conversationId. Instead map current user to their active conversationId in your application's own state store.
     // Without this security control in place, a user can inject messages into another user's conversation.
     [HttpPost("{conversationId}")]
     public async Task<IActionResult> Completions([FromRoute] string conversationId, [FromBody] string message)
@@ -28,6 +28,7 @@ public class ChatController(
             throw new ArgumentException("Message cannot be null, empty, or whitespace.", nameof(message));
         _logger.LogDebug("Prompt received {Prompt}", message);
 
+        // MessageResponseItem is currently intended for evaluation purposes and therefore requires explicit suppression of compiler diagnostics.
         #pragma warning disable OPENAI001
         MessageResponseItem userMessageResponseItem = ResponseItem.CreateUserMessageItem(
             [ResponseContentPart.CreateInputTextPart(message)]);
