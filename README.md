@@ -60,7 +60,7 @@ Follow these instructions to deploy this example to your Azure subscription, try
   - The subscription must have the following quota available in the region you choose.
 
     - App Service Plans: P1v3 (AZ), 3 instances
-    - OpenAI model: GPT-4o model deployment with 50k tokens per minute (TPM) capacity
+    - OpenAI model: GPT-4.1 model deployment with 50k tokens per minute (TPM) capacity
 
 - Your deployment user must have the following permissions at the subscription scope.
 
