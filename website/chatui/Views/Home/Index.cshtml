@@ -205,7 +205,7 @@
         });
 
         async function sendPrompt(prompt) {
-            const response = await fetch(`/chat/completions/${threadId}`, {
+            const response = await fetch(`/chat/responses/${threadId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(prompt)

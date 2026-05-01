@@ -26,20 +26,22 @@ The following workflow corresponds to the previous diagram:
 
 1. An application user interacts with a web application that contains chat functionality. They issue an HTTPS request to the App Service default domain on azurewebsites.net. This domain automatically points to the App Service built-in public IP address. The Transport Layer Security connection is established from the client directly to App Service. Azure fully manages the certificate.
 1. The App Service feature called Easy Auth ensures that the user who accesses the website is authenticated via Microsoft Entra ID.
-1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an agent in Microsoft Foundry by using the Azure AI Persistent Agents SDK.
+1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an agent in Microsoft Foundry through the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework), which calls the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs under the hood.
 1. Foundry Agent Service connects to Azure AI Search to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
 1. Foundry Agent Service connects to an Azure OpenAI model that's deployed in Foundry and sends the prompt that includes the relevant grounding data and chat context.
 1. Application Insights logs information about the original request to App Service and the call agent interactions.
 
 ### Deploying an agent into Foundry Agent Service
 
-Agents can be created via the Foundry portal, [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
+Agents can be created via the Foundry portal, [Foundry SDK](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Projects), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
 
 Ideally agents should be source-controlled and a versioned asset. You then can deploy agents in a coordinated way with the rest of your workload's code. In this deployment guide, you'll create an agent through the REST API to simulate a deployment pipeline which could have created the agent.
 
 ### Invoking the agent from .NET code hosted in an Azure Web App
 
-A chat UI application is deployed into Azure App Service. The .NET code uses the [Azure AI Persistent Agents client library](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Agents.Persistent) to connect to the workload's agent. The endpoint for the agent is exposed over internet through Foundry.
+A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's agent. The endpoint for the agent is exposed over internet through Foundry.
+
+Agent invocation at runtime uses a different API surface than agent lifecycle management. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) uses exclusively the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs, identifying the agent by name and version directly in the request body.
 
 ## Deployment guide
 
@@ -170,37 +172,25 @@ Here you'll test your orchestration agent by invoking it directly from the Found
 
 1. A grounded response to your question should appear on the UI.
 
-### 4. Publish the chat front-end web app
+### 4. Deploy the chat front-end web app
 
 Workloads build chat functionality into an application. Those interfaces usually call Foundry project endpoint invoking a particular agent. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
 
-1. Generate some variables to set context.
-
-   *The following variables align with the defaults in this deployment. Update them if you customized anything.*
+1. Update the app configuration to use the agent you deployed.
 
    ```bash
    FOUNDRY_NAME="aif${BASE_NAME}"
    FOUNDRY_PROJECT_NAME="projchat"
    FOUNDRY_AGENTS_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/agents?api-version=2025-11-15-preview"
 
-   echo $FOUNDRY_AGENTS_URL
-   ```
-
-1. Get Agent ID value.
-
-   ```bash
    AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query last_id -o tsv)
+   AGENT_VERSION=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query 'data[-1].versions.latest.version' -o tsv)
 
-   echo $AGENT_ID
-   ````
+   echo "$AGENT_ID (version $AGENT_VERSION)"
 
-1. Update the app configuration to use the agent you deployed.
-
-   ```bash
    APPSERVICE_NAME=app-$BASE_NAME
-
-   az webapp config appsettings set -g $RESOURCE_GROUP -n $APPSERVICE_NAME --settings AIAgentId=${AGENT_ID}
-   ````
+   az webapp config appsettings set -g $RESOURCE_GROUP -n $APPSERVICE_NAME --settings AIAgentId=${AGENT_ID} AIAgentVersion=${AGENT_VERSION}
+   ```
 
 1. Deploy the ChatUI web app
 
