@@ -154,12 +154,6 @@ To test this scenario, you'll be deploying a prompt-based AI agent. The agent us
 
 1. Click **Save** buton at the top-right of the Agents' Playground panel.
 
-1. Click **Publish** button at the top-right of the Agents' Playground panel and then click **Publish Agent** button.
-
-1. From the confirmation dialog click **Publish** button.
-
-   This will promote an agent from a development asset into a managed Azure resource with a dedicated endpoint.
-
 ### 3. Test the agent from the Foundry portal in the playground
 
 Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent playground chat experience.
