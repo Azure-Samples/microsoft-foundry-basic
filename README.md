@@ -2,7 +2,7 @@
 
 This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Foundry Agent Service as the orchestrator and Azure OpenAI foundation models. This repository directly supports the [Basic end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/basic-openai-e2e-chat) on Microsoft Learn.
 
-The reference implementation illustrates a basic example of a chat application. For a reference implementation that implements more enterprise requirements, please see the [Microsoft Foundry Agent Service baseline reference implementation](https://github.com/Azure-Samples/openai-end-to-end-baseline). That implementation addresses many of the [production readiness changes](https://github.com/search?q=repo%3AAzure-Samples%2Fopenai-end-to-end-basic+%22Production+readiness+change%22&type=code) identified in this code.
+The reference implementation illustrates a basic example of a chat application. For a reference implementation that implements more enterprise requirements, please see the [Microsoft Foundry Agent Service baseline reference implementation](https://github.com/Azure-Samples/microsoft-foundry-baseline). That implementation addresses many of the [production readiness changes](https://github.com/search?q=repo%3AAzure-Samples%2Fmicrosoft-foundry-basic+%22Production+readiness+change%22&type=code) identified in this code.
 
 ## Architecture
 
