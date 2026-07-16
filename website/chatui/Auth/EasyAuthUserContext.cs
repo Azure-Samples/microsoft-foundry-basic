@@ -12,6 +12,11 @@ namespace chatui.Auth;
 /// <c>X-MS-CLIENT-PRINCIPAL</c> header. Falls back to <see cref="DevAuthOptions"/>
 /// when running under the Development environment with <c>DevAuth:Enabled=true</c>
 /// so that local runs and integration tests work without Easy Auth.
+///
+/// In dev mode the client may additionally override the impersonated identity
+/// per request via <c>X-Dev-Oid</c>, <c>X-Dev-Name</c>, <c>X-Dev-Email</c>,
+/// <c>X-Dev-Lang</c> headers. This is only honoured when Easy Auth is not
+/// wired and <c>DevAuth:Enabled</c> is true — never in production.
 /// </summary>
 public sealed class EasyAuthUserContext(
     IHttpContextAccessor httpContextAccessor,
@@ -21,6 +26,10 @@ public sealed class EasyAuthUserContext(
     ILogger<EasyAuthUserContext> logger) : IUserContext
 {
     private const string EasyAuthHeaderName = "X-MS-CLIENT-PRINCIPAL";
+    private const string DevOidHeader   = "X-Dev-Oid";
+    private const string DevNameHeader  = "X-Dev-Name";
+    private const string DevEmailHeader = "X-Dev-Email";
+    private const string DevLangHeader  = "X-Dev-Lang";
 
     // Claim types Easy Auth surfaces. The v2 endpoint uses full OIDC URIs.
     private static readonly string[] ObjectIdClaimTypes =
@@ -89,6 +98,16 @@ public sealed class EasyAuthUserContext(
 
         if (environment.IsDevelopment() && devAuthOptions.Value is { Enabled: true } dev)
         {
+            // Optional per-request override for multi-user testing on the same
+            // tenant. Only trusted inside the Development environment.
+            if (http.Request.Headers.TryGetValue(DevOidHeader, out var oid) && !string.IsNullOrWhiteSpace(oid))
+            {
+                var name = http.Request.Headers.TryGetValue(DevNameHeader, out var n) ? n.ToString() : oid.ToString();
+                var email = http.Request.Headers.TryGetValue(DevEmailHeader, out var e) ? e.ToString() : string.Empty;
+                var lang = http.Request.Headers.TryGetValue(DevLangHeader, out var l) ? l.ToString() : "en";
+                return new ResolvedPrincipal(oid.ToString(), name, email, lang);
+            }
+
             return new ResolvedPrincipal(
                 dev.EntraObjectId,
                 dev.DisplayName,

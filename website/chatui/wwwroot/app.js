@@ -17,11 +17,43 @@ const LANGUAGES = [
 ];
 const langMap = new Map(LANGUAGES.map(l => [l.code, l]));
 
+// -------- Test personas (dev only) --------
+// Pick with ?dev=<key> in the URL. Persisted to localStorage so subsequent
+// requests keep the identity. Backend accepts X-Dev-* headers only when
+// running in the Development environment.
+const DEV_PERSONAS = {
+  sergey: { oid: '7bc3b904-679f-44a7-b0bf-fb6faf468a45', name: 'Sergey', email: 'sergeype@OopsLab.in', lang: 'en' },
+  anna:   { oid: 'aaaa0000-0000-4000-8000-000000000002', name: 'Anna',   email: 'anna@example.com',   lang: 'ru' },
+  john:   { oid: 'aaaa0000-0000-4000-8000-000000000003', name: 'John',   email: 'john@example.com',   lang: 'en' },
+};
+(() => {
+  const url = new URL(location.href);
+  const dev = url.searchParams.get('dev');
+  if (dev !== null) {
+    if (dev === '' || !DEV_PERSONAS[dev]) localStorage.removeItem('devUser');
+    else localStorage.setItem('devUser', dev);
+    url.searchParams.delete('dev');
+    history.replaceState({}, '', url.toString());
+  }
+})();
+const currentDevPersona = () => {
+  const key = localStorage.getItem('devUser');
+  return key && DEV_PERSONAS[key] ? { key, ...DEV_PERSONAS[key] } : null;
+};
+
 // -------- API client --------
 const api = {
   async _req(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', ...opts.headers };
+    const dev = currentDevPersona();
+    if (dev) {
+      headers['X-Dev-Oid'] = dev.oid;
+      headers['X-Dev-Name'] = dev.name;
+      headers['X-Dev-Email'] = dev.email;
+      headers['X-Dev-Lang'] = dev.lang;
+    }
     const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      headers,
       ...opts,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
@@ -522,6 +554,20 @@ async function showJoin(token) {
   };
 }
 
+document.addEventListener('click', (e) => {
+  const badge = e.target.closest('#dev-badge');
+  if (badge) {
+    e.preventDefault();
+    const keys = Object.keys(DEV_PERSONAS);
+    const choice = prompt(`Switch to test persona (${keys.join(', ')}). Blank = clear override.`, currentDevPersona()?.key ?? '');
+    if (choice === null) return;
+    if (!choice) localStorage.removeItem('devUser');
+    else if (DEV_PERSONAS[choice]) localStorage.setItem('devUser', choice);
+    else { toast('Unknown persona: ' + choice, 'error'); return; }
+    location.reload();
+  }
+});
+
 // -------- Boot --------
 async function boot() {
   populateLangSelect();
@@ -552,6 +598,15 @@ function populateLangSelect() {
 function updateMeUi() {
   document.getElementById('me-name').textContent = state.me.displayName;
   document.getElementById('me-language').value = state.me.preferredLanguage;
+  const dev = currentDevPersona();
+  const badge = document.getElementById('dev-badge');
+  if (dev) {
+    badge.hidden = false;
+    badge.textContent = `dev: ${dev.key}`;
+    badge.title = `Impersonating ${dev.name} (${dev.email}). Click to switch.`;
+  } else {
+    badge.hidden = true;
+  }
 }
 
 function handleError(e) {
