@@ -45,12 +45,6 @@ resource speech 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     customSubDomainName: speechName
     disableLocalAuth: true
     publicNetworkAccess: 'Enabled'
-    networkAcls: {
-      defaultAction: 'Allow'
-      bypass: 'AzureServices'
-      ipRules: []
-      virtualNetworkRules: []
-    }
   }
 }
 

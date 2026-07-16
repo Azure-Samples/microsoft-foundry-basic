@@ -44,12 +44,6 @@ resource translator 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     customSubDomainName: translatorName
     disableLocalAuth: true
     publicNetworkAccess: 'Enabled'
-    networkAcls: {
-      defaultAction: 'Allow'
-      bypass: 'AzureServices'
-      ipRules: []
-      virtualNetworkRules: []
-    }
   }
 }
 
