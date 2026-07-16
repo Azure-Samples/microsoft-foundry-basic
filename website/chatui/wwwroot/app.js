@@ -319,14 +319,18 @@ function renderParticipants() {
 }
 
 function renderSubtitle(t) {
+  const container = document.getElementById('subtitles');
+  // Guard against duplicates: WPS may echo a turn we already rendered
+  // optimistically after our own speak.
+  if (t.id && container.querySelector(`[data-turn-id="${t.id}"]`)) return;
   const el = document.createElement('div');
+  if (t.id) el.dataset.turnId = t.id;
   el.className = 'subtitle' + (t.speakerId === state.me.id ? ' mine' : '');
   const speaker = state.meeting?.participants.find(p => p.id === t.speakerId);
   el.innerHTML = `
     <div class="who">${escapeHtml(speaker?.displayName ?? 'Someone')} — ${escapeHtml(langName(t.sourceLang))} → ${escapeHtml(langName(t.callerLang))} · ${formatTime(t.createdAt)}</div>
     <div class="translated">${escapeHtml(t.translatedForCaller ?? t.original)}</div>
     <div class="original">${escapeHtml(t.original)}</div>`;
-  const container = document.getElementById('subtitles');
   if (container.querySelector('.muted')) container.innerHTML = '';
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;
@@ -505,6 +509,8 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
     targets.forEach(l => cfg.addTargetLanguage(l));
     const audio = sdk.AudioConfig.fromDefaultMicrophoneInput();
     const rec = new sdk.TranslationRecognizer(cfg, audio);
+    // Debug handle so we can inspect the last event tree from DevTools.
+    window.__recognizer = rec;
 
     rec.recognizing = (_s, e) => {
       // Interim (partial) result — great UX signal that the mic is picking
@@ -512,20 +518,44 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
       if (e.result.text) hint.textContent = '🎧 …' + e.result.text.slice(-60);
     };
     rec.recognized = async (_s, e) => {
+      window.__lastRecognized = e.result;
+      const reasonName = Object.entries(sdk.ResultReason).find(([, v]) => v === e.result.reason)?.[0] ?? String(e.result.reason);
+      console.log('[Speech] recognized', reasonName, 'text=', e.result.text, 'translations=', e.result.translations && Array.from(e.result.translations.languages));
       if (e.result.reason === sdk.ResultReason.NoMatch) {
         hint.textContent = 'No speech detected — try again.';
         return;
       }
-      if (e.result.reason !== sdk.ResultReason.TranslatedSpeech) return;
       const original = e.result.text?.trim();
-      if (!original) return;
-      hint.textContent = '🎙️ Listening…';
+      if (!original) { hint.textContent = 'Empty result (' + reasonName + ').'; return; }
+      // Collect translations. If the service returned only RecognizedSpeech
+      // (no translation), fall back to sending the original for every target.
       const translations = {};
-      targets.forEach(l => { const t = e.result.translations.get(l); if (t) translations[l] = t; });
+      if (e.result.translations) {
+        for (const lang of e.result.translations.languages) {
+          const t = e.result.translations.get(lang);
+          if (t) translations[lang] = t;
+        }
+      }
+      for (const lang of targets) {
+        if (!translations[lang]) translations[lang] = original;
+      }
       if (!translations[mine]) translations[mine] = original;
+      hint.textContent = '🎙️ Sent: ' + original.slice(0, 60);
       try {
-        await api.postTurn(state.meeting.id, {
+        const { turnId, createdAt } = await api.postTurn(state.meeting.id, {
           original, sourceLang: mine, translations, addresseeId: null,
+        });
+        // Render locally right away — the WPS fan-out will echo the same
+        // turn back but that's fine (renderSubtitle guards against dupes
+        // via turnId below).
+        renderSubtitle({
+          id: turnId,
+          speakerId: state.me.id,
+          sourceLang: mine,
+          callerLang: mine,
+          original,
+          translatedForCaller: translations[mine] ?? original,
+          createdAt,
         });
       } catch (err) { handleError(err); }
     };
