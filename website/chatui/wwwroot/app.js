@@ -335,9 +335,6 @@ function renderSubtitle(t) {
 async function connectWps(meetingId, language) {
   const token = currentJoinToken(meetingId);
   if (!token) {
-    // Opened from history without a join token. WPS subscribe currently needs
-    // a fresh token, so we degrade gracefully — turns render on refresh, mic
-    // still works. Follow-up: add /meetings/{id}/wps-token endpoint.
     document.getElementById('mic-hint').textContent = 'Reconnect via the join link to receive live subtitles.';
     return;
   }
@@ -345,10 +342,24 @@ async function connectWps(meetingId, language) {
   const r = await api.joinMeeting(token, { language });
   const url = r?.wps?.url;
   if (!url) return;
-  const client = new WebPubSubClient.WebPubSubClient({ getClientAccessUrl: async () => url });
+  await bootstrapMeetingWps(url, meetingId, language, r.meeting?.participants?.find(p => p.id === state.me.id)?.id ?? state.me.id);
+}
+
+async function bootstrapMeetingWps(url, meetingId, language, myUserId) {
+  const client = new WebPubSubClient.WebPubSubClient({
+    getClientAccessUrl: async () => url,
+    protocol: WebPubSubClient.WebPubSubJsonProtocol(),
+  });
   client.on('group-message', (e) => handleWps(e.message.data));
   client.on('server-message', (e) => handleWps(e.message.data));
   await client.start();
+  // Auto-join all three meeting groups so we receive presence updates,
+  // language-scoped turn broadcasts, and private events targeted at us.
+  await Promise.all([
+    client.joinGroup(`m:${meetingId}:presence`),
+    client.joinGroup(`m:${meetingId}:lang:${language}`),
+    client.joinGroup(`m:${meetingId}:u:${myUserId}`),
+  ]);
   state.meetingWps = client;
 }
 
@@ -469,7 +480,22 @@ async function enableMicIfPossible() {
 let activeRecognizer = null;
 document.getElementById('mic-toggle').addEventListener('click', async () => {
   const btn = document.getElementById('mic-toggle');
+  const hint = document.getElementById('mic-hint');
   if (activeRecognizer) { await stopSpeaking(); return; }
+
+  // Pre-warm mic permission with getUserMedia so the browser prompt fires on
+  // a real user gesture. The Speech SDK opens the mic internally via
+  // AudioConfig.fromDefaultMicrophoneInput, but permission denial there is
+  // opaque — this way we get a clear failure before starting the recognizer.
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop()); // release; Speech SDK will re-open
+  } catch (err) {
+    toast('Microphone permission denied: ' + (err.message || err.name), 'error');
+    hint.textContent = 'Microphone permission denied.';
+    return;
+  }
+
   try {
     const sdk = await ensureSpeechSdk();
     const cfg = await getSpeechConfig(sdk, true);
@@ -479,10 +505,21 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
     targets.forEach(l => cfg.addTargetLanguage(l));
     const audio = sdk.AudioConfig.fromDefaultMicrophoneInput();
     const rec = new sdk.TranslationRecognizer(cfg, audio);
+
+    rec.recognizing = (_s, e) => {
+      // Interim (partial) result — great UX signal that the mic is picking
+      // up audio at all.
+      if (e.result.text) hint.textContent = '🎧 …' + e.result.text.slice(-60);
+    };
     rec.recognized = async (_s, e) => {
+      if (e.result.reason === sdk.ResultReason.NoMatch) {
+        hint.textContent = 'No speech detected — try again.';
+        return;
+      }
       if (e.result.reason !== sdk.ResultReason.TranslatedSpeech) return;
       const original = e.result.text?.trim();
       if (!original) return;
+      hint.textContent = '🎙️ Listening…';
       const translations = {};
       targets.forEach(l => { const t = e.result.translations.get(l); if (t) translations[l] = t; });
       if (!translations[mine]) translations[mine] = original;
@@ -492,12 +529,27 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
         });
       } catch (err) { handleError(err); }
     };
-    rec.canceled = (_s, e) => { toast(`Speech recognition canceled: ${e.errorDetails ?? e.reason}`, 'error'); stopSpeaking(); };
-    rec.startContinuousRecognitionAsync();
-    activeRecognizer = rec;
-    btn.textContent = '⏸ Stop';
-    btn.classList.add('recording');
-  } catch (e) { handleError(e); }
+    rec.canceled = (_s, e) => {
+      const detail = e.errorDetails || (e.reason === sdk.CancellationReason.EndOfStream ? 'end of stream' : String(e.reason));
+      toast('Speech recognition canceled: ' + detail, 'error');
+      hint.textContent = 'Recognition stopped: ' + detail;
+      stopSpeaking();
+    };
+    rec.sessionStopped = () => { hint.textContent = 'Session stopped.'; stopSpeaking(); };
+
+    rec.startContinuousRecognitionAsync(
+      () => {
+        activeRecognizer = rec;
+        btn.textContent = '⏸ Stop';
+        btn.classList.add('recording');
+        hint.textContent = '🎙️ Listening… speak now.';
+      },
+      (err) => {
+        toast('Failed to start speech: ' + err, 'error');
+        hint.textContent = 'Failed to start: ' + err;
+      }
+    );
+  } catch (e) { handleError(e); hint.textContent = 'Error: ' + (e.message ?? e); }
 });
 async function stopSpeaking() {
   if (!activeRecognizer) return;
@@ -537,17 +589,11 @@ async function showJoin(token) {
         state.me.preferredLanguage = select.value;
         updateMeUi();
       }
-      // Navigate via SPA to the room; connectWps will be a no-op there because
-      // token isn't in URL anymore. We bootstrap WPS directly with the URL we got.
+      // Navigate via SPA to the room, then bootstrap WPS from the URL we got.
       history.replaceState({}, '', '/');
       await showMeetingRoom(r.meetingId);
-      // Manually bootstrap WPS from the just-issued client access URL:
       await ensureWpsSdk();
-      const client = new WebPubSubClient.WebPubSubClient({ getClientAccessUrl: async () => r.wps.url });
-      client.on('group-message', (e) => handleWps(e.message.data));
-      client.on('server-message', (e) => handleWps(e.message.data));
-      await client.start();
-      state.meetingWps = client;
+      await bootstrapMeetingWps(r.wps.url, r.meetingId, select.value, state.me.id);
       await enableMicIfPossible();
       toast('You joined the meeting', 'success');
     } catch (e) { handleError(e); }
