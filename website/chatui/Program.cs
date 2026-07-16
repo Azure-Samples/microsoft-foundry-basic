@@ -144,12 +144,28 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 
 app.MapControllers();
-app.MapFallbackToFile("index.html", new StaticFileOptions
+
+// Default MapFallbackToFile uses the `{*path:nonfile}` pattern which rejects
+// any path containing a dot (treats it as a file extension). This breaks
+// deep links like /join/{jwt} because JWTs contain dots. Use an explicit
+// route that matches any non-/api/* path and serves index.html.
+app.MapFallback("{**path}", async context =>
 {
-    OnPrepareResponse = ctx =>
+    var path = context.Request.Path.Value ?? string.Empty;
+    if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
     {
-        ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
     }
+    var indexPath = Path.Combine(app.Environment.WebRootPath, "index.html");
+    if (!File.Exists(indexPath))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(indexPath);
 });
 
 app.Run();
