@@ -23,6 +23,11 @@ builder.Services.AddOptions<PostgresOptions>()
 builder.Services.AddOptions<DevAuthOptions>()
     .Bind(builder.Configuration.GetSection(DevAuthOptions.SectionName));
 
+builder.Services.AddOptions<TranslatorOptions>()
+    .Bind(builder.Configuration.GetSection(TranslatorOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
 builder.Services.AddSingleton((provider) =>
@@ -75,6 +80,7 @@ builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
+builder.Services.AddSingleton<chatui.Services.TranslatorService>();
 
 builder.Services.AddControllers();
 

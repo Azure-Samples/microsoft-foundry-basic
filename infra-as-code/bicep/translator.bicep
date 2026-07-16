@@ -85,3 +85,6 @@ output translatorName string = translator.name
 
 @description('The Translator endpoint (Entra ID enabled).')
 output translatorEndpoint string = translator.properties.endpoint
+
+@description('The Azure region of the Translator resource. Required by the SDK when authenticating with an Entra token.')
+output translatorRegion string = translator.location

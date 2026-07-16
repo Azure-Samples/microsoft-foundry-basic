@@ -234,7 +234,8 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
       AIAgentId: 'Not yet set' // Will be set once the agent is created
       AIAgentVersion: 'Not yet set' // Will be set once the agent is created
-      TranslatorEndpoint: translator.properties.endpoint
+      Translator__Endpoint: translator.properties.endpoint
+      Translator__Region: translator.location
       SpeechEndpoint: speech.properties.endpoint
       SpeechRegion: speech.location
       SpeechResourceId: speech.id
