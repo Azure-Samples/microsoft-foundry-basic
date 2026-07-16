@@ -36,7 +36,7 @@ var kvName = 'kv-${baseName}'
 
 @description('Built-in role: Key Vault Secrets User (read secret values only).')
 resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: '4633458b-17de-4321-a41d-b30fca9145db'
+  name: '4633458b-17de-408a-b874-0445c86b69e6'
   scope: subscription()
 }
 
