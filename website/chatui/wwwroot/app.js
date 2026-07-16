@@ -503,13 +503,29 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
   try {
     const sdk = await ensureSpeechSdk();
     const cfg = await getSpeechConfig(sdk, true);
-    const mine = state.meeting.participants.find(p => p.id === state.me.id)?.language ?? state.me.preferredLanguage;
-    cfg.speechRecognitionLanguage = langMap.get(mine)?.stt ?? 'en-US';
-    const targets = [...new Set(state.meeting.participants.map(p => p.language))];
+    const myLang = state.meeting.participants.find(p => p.id === state.me.id)?.language ?? state.me.preferredLanguage;
+    // Candidate STT locales for auto language identification — union of all
+    // participants' languages so any of them can speak into the same mic.
+    // Speech ID supports up to 10 candidates.
+    const participantLangs = [...new Set(state.meeting.participants.map(p => p.language))];
+    const sttCandidates = participantLangs
+      .map(l => langMap.get(l)?.stt)
+      .filter(Boolean)
+      .slice(0, 10);
+    if (sttCandidates.length === 0) sttCandidates.push(langMap.get(myLang)?.stt ?? 'en-US');
+
+    // Target languages for translation are the same set (we send translations
+    // for every listener; the speaker's own language is used as fallback).
+    const targets = participantLangs;
+
+    // AutoDetectSourceLanguageConfig identifies the language of every
+    // utterance from the candidate list, so meeting attendees can share one
+    // mic and each speak in their own language.
+    const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(sttCandidates);
     targets.forEach(l => cfg.addTargetLanguage(l));
+
     const audio = sdk.AudioConfig.fromDefaultMicrophoneInput();
-    const rec = new sdk.TranslationRecognizer(cfg, audio);
-    // Debug handle so we can inspect the last event tree from DevTools.
+    const rec = sdk.TranslationRecognizer.FromConfig(cfg, autoDetect, audio);
     window.__recognizer = rec;
 
     rec.recognizing = (_s, e) => {
@@ -520,15 +536,22 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
     rec.recognized = async (_s, e) => {
       window.__lastRecognized = e.result;
       const reasonName = Object.entries(sdk.ResultReason).find(([, v]) => v === e.result.reason)?.[0] ?? String(e.result.reason);
-      console.log('[Speech] recognized', reasonName, 'text=', e.result.text, 'translations=', e.result.translations && Array.from(e.result.translations.languages));
+
+      // Detected language from Speech Language ID (BCP-47 STT code, e.g. 'en-US').
+      // Fall back to the mic owner's language if detection didn't fire.
+      const detectedStt = sdk.AutoDetectSourceLanguageResult.fromResult(e.result)?.language;
+      const detectedLang = detectedStt
+        ? (LANGUAGES.find(l => l.stt === detectedStt)?.code ?? detectedStt.split('-')[0])
+        : myLang;
+
+      console.log('[Speech] recognized', reasonName, 'text=', e.result.text, 'detected=', detectedStt, '->', detectedLang, 'translations=', e.result.translations && Array.from(e.result.translations.languages));
       if (e.result.reason === sdk.ResultReason.NoMatch) {
         hint.textContent = 'No speech detected — try again.';
         return;
       }
       const original = e.result.text?.trim();
       if (!original) { hint.textContent = 'Empty result (' + reasonName + ').'; return; }
-      // Collect translations. If the service returned only RecognizedSpeech
-      // (no translation), fall back to sending the original for every target.
+
       const translations = {};
       if (e.result.translations) {
         for (const lang of e.result.translations.languages) {
@@ -536,25 +559,25 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
           if (t) translations[lang] = t;
         }
       }
+      // Ensure every listener gets *something* — the speaker's own utterance
+      // is used verbatim as its own translation when Speech didn't emit one.
       for (const lang of targets) {
         if (!translations[lang]) translations[lang] = original;
       }
-      if (!translations[mine]) translations[mine] = original;
-      hint.textContent = '🎙️ Sent: ' + original.slice(0, 60);
+      if (!translations[detectedLang]) translations[detectedLang] = original;
+
+      hint.textContent = `🎙️ (${detectedLang}) ${original.slice(0, 60)}`;
       try {
         const { turnId, createdAt } = await api.postTurn(state.meeting.id, {
-          original, sourceLang: mine, translations, addresseeId: null,
+          original, sourceLang: detectedLang, translations, addresseeId: null,
         });
-        // Render locally right away — the WPS fan-out will echo the same
-        // turn back but that's fine (renderSubtitle guards against dupes
-        // via turnId below).
         renderSubtitle({
           id: turnId,
           speakerId: state.me.id,
-          sourceLang: mine,
-          callerLang: mine,
+          sourceLang: detectedLang,
+          callerLang: myLang,
           original,
-          translatedForCaller: translations[mine] ?? original,
+          translatedForCaller: translations[myLang] ?? original,
           createdAt,
         });
       } catch (err) { handleError(err); }
