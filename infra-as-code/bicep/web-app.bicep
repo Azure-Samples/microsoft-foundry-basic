@@ -236,9 +236,9 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       AIAgentVersion: 'Not yet set' // Will be set once the agent is created
       Translator__Endpoint: translator.properties.endpoint
       Translator__Region: translator.location
-      SpeechEndpoint: speech.properties.endpoint
-      SpeechRegion: speech.location
-      SpeechResourceId: speech.id
+      Speech__Endpoint: speech.properties.endpoint
+      Speech__Region: speech.location
+      Speech__ResourceId: speech.id
       WebPubSub__Endpoint: 'https://${webPubSub.properties.hostName}'
       WebPubSub__Hub: 'meetings'
       WebPubSub__ClientTokenLifetimeMinutes: '60'

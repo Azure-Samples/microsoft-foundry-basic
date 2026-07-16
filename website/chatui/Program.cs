@@ -43,6 +43,11 @@ builder.Services.AddOptions<WebPubSubOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<SpeechOptions>()
+    .Bind(builder.Configuration.GetSection(SpeechOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
 builder.Services.AddSingleton((provider) =>
