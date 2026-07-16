@@ -722,13 +722,54 @@ async function stopSpeaking() {
 }
 
 async function speak(text, lang) {
-  const voice = langMap.get(lang)?.voice;
-  if (!voice) return;
-  const sdk = await ensureSpeechSdk();
-  const cfg = await getSpeechConfig(sdk, false);
-  cfg.speechSynthesisVoiceName = voice;
-  const synth = new sdk.SpeechSynthesizer(cfg);
-  synth.speakTextAsync(text, () => synth.close(), () => synth.close());
+  if (!text) return;
+  const langInfo = langMap.get(lang);
+  const bcp47 = langInfo?.stt ?? lang;
+
+  // Try Azure Neural voice first for quality; fall back to browser
+  // SpeechSynthesis if the SDK path errors out (expired token, quota,
+  // audio-context autoplay block, missing voice for a region, etc.).
+  try {
+    const sdk = await ensureSpeechSdk();
+    const cfg = await getSpeechConfig(sdk, false);
+    if (langInfo?.voice) cfg.speechSynthesisVoiceName = langInfo.voice;
+    const synth = new sdk.SpeechSynthesizer(cfg);
+    await new Promise((resolve, reject) => {
+      synth.speakTextAsync(text,
+        (result) => {
+          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+            synth.close();
+            resolve();
+          } else {
+            const err = new Error(result.errorDetails || ('reason=' + result.reason));
+            synth.close();
+            reject(err);
+          }
+        },
+        (err) => { synth.close(); reject(new Error(String(err))); }
+      );
+    });
+    return;
+  } catch (e) {
+    console.warn('[TTS] Azure Neural failed for', lang, '-', e.message, '— falling back to browser TTS.');
+  }
+
+  // Browser fallback (System Speech Synthesis)
+  if (!('speechSynthesis' in window)) return;
+  try {
+    // Some browsers need a fresh voice list before Utterance works.
+    if (window.speechSynthesis.getVoices().length === 0) {
+      await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 500); });
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = bcp47;
+    const preferred = window.speechSynthesis.getVoices().find(v => v.lang?.toLowerCase().startsWith(bcp47.slice(0, 2).toLowerCase()));
+    if (preferred) u.voice = preferred;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch (e) {
+    console.warn('[TTS] Browser fallback also failed:', e);
+  }
 }
 
 // -------- Join screen --------
