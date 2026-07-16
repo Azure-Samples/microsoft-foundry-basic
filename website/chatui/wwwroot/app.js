@@ -260,11 +260,17 @@ async function showMeetingRoom(id) {
   const container = document.getElementById('subtitles');
   if (turns.length) { container.innerHTML = ''; turns.forEach(renderSubtitle); }
 
-  // Attempt to auto-connect to WPS as an existing participant
+  // Attempt to auto-connect to WPS as an existing participant. Failures are
+  // non-fatal — we can still see history and (once mic is enabled) send turns.
   const me = room.participants.find(p => p.id === state.me.id);
-  if (me) await connectWps(id, me.language);
-  else document.getElementById('mic-hint').textContent = 'You need to open this meeting from a join link to send speech.';
+  if (me) {
+    try { await connectWps(id, me.language); }
+    catch (e) { console.warn('WPS connect skipped:', e); toast('Live subtitles disabled — reopen via the join link to receive them.', 'error'); }
+  } else {
+    document.getElementById('mic-hint').textContent = 'You need to open this meeting from a join link to send speech.';
+  }
 
+  // Mic enablement is independent of WPS; run it even if WPS bootstrap failed.
   await enableMicIfPossible();
 }
 
@@ -294,16 +300,15 @@ function renderSubtitle(t) {
 }
 
 async function connectWps(meetingId, language) {
-  await ensureWpsSdk();
   const token = currentJoinToken(meetingId);
   if (!token) {
-    // Opened from history without a join token — we can still read turns and
-    // send from the mic (the participant record already exists), but WPS
-    // fan-out won't reach us until the client is bootstrapped with a fresh
-    // access URL. Backend currently binds URL issuance to /meetings/join.
+    // Opened from history without a join token. WPS subscribe currently needs
+    // a fresh token, so we degrade gracefully — turns render on refresh, mic
+    // still works. Follow-up: add /meetings/{id}/wps-token endpoint.
     document.getElementById('mic-hint').textContent = 'Reconnect via the join link to receive live subtitles.';
     return;
   }
+  await ensureWpsSdk();
   const r = await api.joinMeeting(token, { language });
   const url = r?.wps?.url;
   if (!url) return;
@@ -376,19 +381,30 @@ function ensureSpeechSdk() {
   if (window.SpeechSDK) return Promise.resolve(window.SpeechSDK);
   if (speechSdkLoad) return speechSdkLoad;
   speechSdkLoad = new Promise((resolve, reject) => {
-    const check = () => window.SpeechSDK ? resolve(window.SpeechSDK) : setTimeout(check, 100);
-    setTimeout(() => reject(new Error('Speech SDK failed to load')), 15000);
+    const start = Date.now();
+    const check = () => {
+      if (window.SpeechSDK) return resolve(window.SpeechSDK);
+      if (Date.now() - start > 60000) return reject(new Error('Speech SDK failed to load'));
+      setTimeout(check, 200);
+    };
     check();
   });
   return speechSdkLoad;
 }
+let wpsSdkLoad;
 function ensureWpsSdk() {
-  return new Promise((resolve, reject) => {
-    if (window.WebPubSubClient) return resolve();
-    const check = () => window.WebPubSubClient ? resolve() : setTimeout(check, 100);
-    setTimeout(() => reject(new Error('Web PubSub SDK failed to load')), 15000);
-    check();
-  });
+  if (window.WebPubSubClient?.WebPubSubClient) return Promise.resolve(window.WebPubSubClient);
+  if (!wpsSdkLoad) {
+    // @azure/web-pubsub-client ships as ESM only. esm.sh transforms it into a
+    // browser-friendly ES module we can dynamic-import.
+    wpsSdkLoad = import('https://esm.sh/@azure/web-pubsub-client@1.1.0')
+      .then((mod) => {
+        // mod is a module namespace object with { WebPubSubClient, ... }.
+        window.WebPubSubClient = mod;
+        return mod;
+      });
+  }
+  return wpsSdkLoad;
 }
 
 let cachedSpeechToken = null;
