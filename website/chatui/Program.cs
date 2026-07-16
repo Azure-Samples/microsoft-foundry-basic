@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Azure.AI.Projects;
 using Azure.Core;
 using Azure.Identity;
+using chatui.Auth;
 using chatui.Configuration;
 using chatui.Data;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,9 @@ builder.Services.AddOptions<PostgresOptions>()
     .Bind(builder.Configuration.GetSection(PostgresOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+
+builder.Services.AddOptions<DevAuthOptions>()
+    .Bind(builder.Configuration.GetSection(DevAuthOptions.SectionName));
 
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
@@ -68,6 +72,9 @@ builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
     options.UseNpgsql(dataSource, npg => npg.UseVector());
     options.UseSnakeCaseNamingConvention();
 });
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
 
 builder.Services.AddControllers();
 
