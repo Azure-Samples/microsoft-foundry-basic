@@ -101,7 +101,19 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 .pill { padding: 3px 10px; border-radius: 999px; background: var(--surface-soft); border: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .pill.accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .muted { color: var(--text-muted); }
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+  margin: 12px 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+.lang-grid label { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
+.lang-grid label:hover { background: var(--surface-soft); }
+.lang-grid input[type="checkbox"]:checked + span { font-weight: 700; color: var(--accent); }
 .small { font-size: 13px; }
+.btn.small { padding: 6px 10px; font-size: 13px; }
 .center { text-align: center; }
 .hint { font-size: 12px; }
 

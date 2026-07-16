@@ -3,19 +3,59 @@
 // and Neural TTS, and the Azure Web PubSub client for meeting fan-out.
 
 const LANGUAGES = [
-  { code: 'en', name: 'English',  stt: 'en-US', voice: 'en-US-EmmaMultilingualNeural' },
-  { code: 'ru', name: 'Русский',   stt: 'ru-RU', voice: 'ru-RU-SvetlanaNeural' },
-  { code: 'es', name: 'Español',   stt: 'es-ES', voice: 'es-ES-XimenaNeural' },
-  { code: 'fr', name: 'Français',  stt: 'fr-FR', voice: 'fr-FR-DeniseNeural' },
-  { code: 'de', name: 'Deutsch',   stt: 'de-DE', voice: 'de-DE-KatjaNeural' },
-  { code: 'it', name: 'Italiano',  stt: 'it-IT', voice: 'it-IT-ElsaNeural' },
-  { code: 'pt', name: 'Português', stt: 'pt-PT', voice: 'pt-PT-RaquelNeural' },
-  { code: 'zh', name: '中文',       stt: 'zh-CN', voice: 'zh-CN-XiaoxiaoNeural' },
-  { code: 'ja', name: '日本語',     stt: 'ja-JP', voice: 'ja-JP-NanamiNeural' },
-  { code: 'ar', name: 'العربية',   stt: 'ar-SA', voice: 'ar-SA-ZariyahNeural' },
-  { code: 'uk', name: 'Українська', stt: 'uk-UA', voice: 'uk-UA-PolinaNeural' },
+  { code: 'en', name: 'English',      stt: 'en-US', voice: 'en-US-EmmaMultilingualNeural' },
+  { code: 'ru', name: 'Русский',       stt: 'ru-RU', voice: 'ru-RU-SvetlanaNeural' },
+  { code: 'uk', name: 'Українська',    stt: 'uk-UA', voice: 'uk-UA-PolinaNeural' },
+  { code: 'es', name: 'Español',       stt: 'es-ES', voice: 'es-ES-XimenaNeural' },
+  { code: 'pt', name: 'Português',     stt: 'pt-PT', voice: 'pt-PT-RaquelNeural' },
+  { code: 'fr', name: 'Français',      stt: 'fr-FR', voice: 'fr-FR-DeniseNeural' },
+  { code: 'de', name: 'Deutsch',       stt: 'de-DE', voice: 'de-DE-KatjaNeural' },
+  { code: 'it', name: 'Italiano',      stt: 'it-IT', voice: 'it-IT-ElsaNeural' },
+  { code: 'nl', name: 'Nederlands',    stt: 'nl-NL', voice: 'nl-NL-FennaNeural' },
+  { code: 'pl', name: 'Polski',        stt: 'pl-PL', voice: 'pl-PL-AgnieszkaNeural' },
+  { code: 'cs', name: 'Čeština',       stt: 'cs-CZ', voice: 'cs-CZ-VlastaNeural' },
+  { code: 'sv', name: 'Svenska',       stt: 'sv-SE', voice: 'sv-SE-SofieNeural' },
+  { code: 'no', name: 'Norsk',         stt: 'nb-NO', voice: 'nb-NO-PernilleNeural' },
+  { code: 'da', name: 'Dansk',         stt: 'da-DK', voice: 'da-DK-ChristelNeural' },
+  { code: 'fi', name: 'Suomi',         stt: 'fi-FI', voice: 'fi-FI-SelmaNeural' },
+  { code: 'tr', name: 'Türkçe',        stt: 'tr-TR', voice: 'tr-TR-EmelNeural' },
+  { code: 'el', name: 'Ελληνικά',      stt: 'el-GR', voice: 'el-GR-AthinaNeural' },
+  { code: 'he', name: 'עברית',         stt: 'he-IL', voice: 'he-IL-HilaNeural' },
+  { code: 'ar', name: 'العربية',       stt: 'ar-SA', voice: 'ar-SA-ZariyahNeural' },
+  { code: 'fa', name: 'فارسی',         stt: 'fa-IR', voice: 'fa-IR-DilaraNeural' },
+  { code: 'hi', name: 'हिन्दी',         stt: 'hi-IN', voice: 'hi-IN-SwaraNeural' },
+  { code: 'bn', name: 'বাংলা',          stt: 'bn-IN', voice: 'bn-IN-TanishaaNeural' },
+  { code: 'ta', name: 'தமிழ்',         stt: 'ta-IN', voice: 'ta-IN-PallaviNeural' },
+  { code: 'te', name: 'తెలుగు',        stt: 'te-IN', voice: 'te-IN-ShrutiNeural' },
+  { code: 'th', name: 'ภาษาไทย',       stt: 'th-TH', voice: 'th-TH-PremwadeeNeural' },
+  { code: 'vi', name: 'Tiếng Việt',    stt: 'vi-VN', voice: 'vi-VN-HoaiMyNeural' },
+  { code: 'id', name: 'Bahasa Indonesia', stt: 'id-ID', voice: 'id-ID-GadisNeural' },
+  { code: 'ms', name: 'Bahasa Melayu', stt: 'ms-MY', voice: 'ms-MY-YasminNeural' },
+  { code: 'fil', name: 'Filipino',     stt: 'fil-PH', voice: 'fil-PH-BlessicaNeural' },
+  { code: 'zh', name: '中文 (简体)',    stt: 'zh-CN', voice: 'zh-CN-XiaoxiaoNeural' },
+  { code: 'zh-Hant', name: '中文 (繁體)', stt: 'zh-HK', voice: 'zh-HK-HiuMaanNeural' },
+  { code: 'ja', name: '日本語',         stt: 'ja-JP', voice: 'ja-JP-NanamiNeural' },
+  { code: 'ko', name: '한국어',         stt: 'ko-KR', voice: 'ko-KR-SunHiNeural' },
 ];
 const langMap = new Map(LANGUAGES.map(l => [l.code, l]));
+
+// -------- Meeting local preferences (per user, per device) --------
+const meetingPrefsKey = () => `meetingPrefs:${state.me?.id ?? 'anon'}`;
+function loadMeetingPrefs() {
+  try {
+    const raw = localStorage.getItem(meetingPrefsKey());
+    if (!raw) return { candidates: null, ttsEnabled: true };
+    return { candidates: null, ttsEnabled: true, ...JSON.parse(raw) };
+  } catch { return { candidates: null, ttsEnabled: true }; }
+}
+function saveMeetingPrefs(patch) {
+  const merged = { ...loadMeetingPrefs(), ...patch };
+  localStorage.setItem(meetingPrefsKey(), JSON.stringify(merged));
+}
+// Last language actually heard from another speaker in the current meeting —
+// used to decide which language to translate the local user's speech into
+// when the other side is a listener with no explicit "target lang" set.
+let lastForeignLang = null;
 
 // -------- Test personas (dev only) --------
 // Pick with ?dev=<key> in the URL. Persisted to localStorage so subsequent
@@ -281,9 +321,11 @@ async function showMeetingRoom(id) {
   show('meeting-room');
   const room = await api.meeting(id);
   state.meeting = room;
+  lastForeignLang = null;
   document.getElementById('room-title').textContent = room.title ?? 'Meeting';
   document.getElementById('room-status').textContent = room.status;
   document.getElementById('room-end').hidden = !(room.initiator.id === state.me.id && room.status === 'active');
+  document.getElementById('tts-toggle').checked = loadMeetingPrefs().ttsEnabled !== false;
   renderParticipants();
   document.getElementById('subtitles').innerHTML = '<div class="muted center">Waiting for the first turn…</div>';
   document.getElementById('summary-box').hidden = true;
@@ -423,6 +465,34 @@ document.getElementById('room-summary').addEventListener('click', async () => {
   } catch (e) { handleError(e); }
 });
 
+// TTS toggle + language-prefs dialog wiring
+document.getElementById('tts-toggle').addEventListener('change', (e) => {
+  saveMeetingPrefs({ ttsEnabled: e.target.checked });
+});
+document.getElementById('lang-prefs-open').addEventListener('click', () => openLangPrefsDialog());
+document.getElementById('lang-prefs-save').addEventListener('click', () => {
+  const picked = [...document.querySelectorAll('#lang-prefs-list input:checked')].map(c => c.value);
+  if (picked.length > 10) { toast('At most 10 languages, please.', 'error'); return; }
+  saveMeetingPrefs({ candidates: picked });
+  document.getElementById('lang-prefs-dialog').close();
+  toast('Language preferences saved. Press Stop and Start speaking again to apply.', 'success');
+});
+function openLangPrefsDialog() {
+  const list = document.getElementById('lang-prefs-list');
+  const prefs = loadMeetingPrefs();
+  const myLang = state.me?.preferredLanguage ?? 'en';
+  const currentSet = new Set(prefs.candidates && prefs.candidates.length > 0
+    ? prefs.candidates
+    : (state.meeting?.participants.map(p => p.language) ?? [myLang]));
+  currentSet.add(myLang);
+  list.innerHTML = LANGUAGES.map(l => {
+    const disabled = l.code === myLang ? 'disabled' : '';
+    const checked = currentSet.has(l.code) ? 'checked' : '';
+    return `<label><input type="checkbox" value="${l.code}" ${checked} ${disabled} /><span>${l.name}</span></label>`;
+  }).join('');
+  document.getElementById('lang-prefs-dialog').showModal();
+}
+
 // -------- Speech: STT + MT via TranslationRecognizer, TTS via SpeechSynthesizer --------
 let speechSdkLoad;
 function ensureSpeechSdk() {
@@ -504,23 +574,31 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
     const sdk = await ensureSpeechSdk();
     const cfg = await getSpeechConfig(sdk, true);
     const myLang = state.meeting.participants.find(p => p.id === state.me.id)?.language ?? state.me.preferredLanguage;
-    // Candidate STT locales for auto language identification — union of all
-    // participants' languages so any of them can speak into the same mic.
-    // Speech ID supports up to 10 candidates.
-    const participantLangs = [...new Set(state.meeting.participants.map(p => p.language))];
-    const sttCandidates = participantLangs
+
+    // Per-user candidate list of languages we expect to hear. Defaults to
+    // union of participants' languages; user can override in the meeting-room
+    // side panel (persisted per user in localStorage).
+    const prefs = loadMeetingPrefs();
+    const meetingLangs = [...new Set(state.meeting.participants.map(p => p.language))];
+    const chosen = (prefs.candidates && prefs.candidates.length > 0)
+      ? prefs.candidates
+      : meetingLangs;
+    // Always include the mic owner's own language in the STT candidate set
+    // so their own speech is always recognised even if not in prefs.
+    const sourceLangs = [...new Set([myLang, ...chosen])];
+
+    const sttCandidates = sourceLangs
       .map(l => langMap.get(l)?.stt)
       .filter(Boolean)
       .slice(0, 10);
     if (sttCandidates.length === 0) sttCandidates.push(langMap.get(myLang)?.stt ?? 'en-US');
 
-    // Target languages for translation are the same set (we send translations
-    // for every listener; the speaker's own language is used as fallback).
-    const targets = participantLangs;
+    // Target languages we always request from Speech Translation. Includes:
+    //  - our own language (so foreign speech gets translated to us),
+    //  - the candidate list (so our speech can be translated to whoever spoke),
+    //  - other meeting participants' languages (so fan-out has every listener covered).
+    const targets = [...new Set([myLang, ...sourceLangs, ...meetingLangs])];
 
-    // AutoDetectSourceLanguageConfig identifies the language of every
-    // utterance from the candidate list, so meeting attendees can share one
-    // mic and each speak in their own language.
     const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(sttCandidates);
     targets.forEach(l => cfg.addTargetLanguage(l));
 
@@ -537,20 +615,23 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
       window.__lastRecognized = e.result;
       const reasonName = Object.entries(sdk.ResultReason).find(([, v]) => v === e.result.reason)?.[0] ?? String(e.result.reason);
 
-      // Detected language from Speech Language ID (BCP-47 STT code, e.g. 'en-US').
-      // Fall back to the mic owner's language if detection didn't fire.
       const detectedStt = sdk.AutoDetectSourceLanguageResult.fromResult(e.result)?.language;
       const detectedLang = detectedStt
         ? (LANGUAGES.find(l => l.stt === detectedStt)?.code ?? detectedStt.split('-')[0])
         : myLang;
 
       console.log('[Speech] recognized', reasonName, 'text=', e.result.text, 'detected=', detectedStt, '->', detectedLang, 'translations=', e.result.translations && Array.from(e.result.translations.languages));
+
       if (e.result.reason === sdk.ResultReason.NoMatch) {
         hint.textContent = 'No speech detected — try again.';
         return;
       }
       const original = e.result.text?.trim();
       if (!original) { hint.textContent = 'Empty result (' + reasonName + ').'; return; }
+
+      const isMine = detectedLang === myLang;
+      // Only remember someone else's language as a reply target.
+      if (!isMine) lastForeignLang = detectedLang;
 
       const translations = {};
       if (e.result.translations) {
@@ -559,27 +640,43 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
           if (t) translations[lang] = t;
         }
       }
-      // Ensure every listener gets *something* — the speaker's own utterance
-      // is used verbatim as its own translation when Speech didn't emit one.
       for (const lang of targets) {
         if (!translations[lang]) translations[lang] = original;
       }
       if (!translations[detectedLang]) translations[detectedLang] = original;
 
       hint.textContent = `🎙️ (${detectedLang}) ${original.slice(0, 60)}`;
+
       try {
         const { turnId, createdAt } = await api.postTurn(state.meeting.id, {
           original, sourceLang: detectedLang, translations, addresseeId: null,
         });
+
+        // What the mic owner sees on their own timeline:
+        //  - If the speaker was somebody else -> show translation in myLang.
+        //  - If it was themselves -> show translation in the last foreign
+        //    language we heard (so the reply reads in the other side's
+        //    language). Falls back to their own language if nobody else has
+        //    spoken yet.
+        const displayLang = isMine
+          ? (lastForeignLang ?? myLang)
+          : myLang;
+
         renderSubtitle({
           id: turnId,
-          speakerId: state.me.id,
+          speakerId: state.me.id, // logical author: whoever spoke into this device
           sourceLang: detectedLang,
-          callerLang: myLang,
+          callerLang: displayLang,
           original,
-          translatedForCaller: translations[myLang] ?? original,
+          translatedForCaller: translations[displayLang] ?? original,
           createdAt,
         });
+
+        // Optional TTS. Only speak the foreign side to the mic owner.
+        const ttsEnabled = loadMeetingPrefs().ttsEnabled !== false;
+        if (ttsEnabled && !isMine && translations[myLang]) {
+          speak(translations[myLang], myLang).catch(() => {});
+        }
       } catch (err) { handleError(err); }
     };
     rec.canceled = (_s, e) => {

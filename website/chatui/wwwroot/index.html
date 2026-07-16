@@ -8,7 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E🌐%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/style.css" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=10" defer></script>
+  <script type="module" src="/app.js?v=11" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -92,6 +92,10 @@
           <div class="mic-panel">
             <button class="btn primary mic-btn" id="mic-toggle" disabled>🎙️ Start speaking</button>
             <p class="muted hint" id="mic-hint">Loading speech capabilities…</p>
+            <label class="row-gap small">
+              <input type="checkbox" id="tts-toggle" /> Speak translations for me
+            </label>
+            <button class="btn secondary small" type="button" id="lang-prefs-open">Languages to listen for…</button>
           </div>
           <div class="room-actions">
             <button class="btn secondary" id="room-summary">Summarise so far</button>
@@ -144,6 +148,18 @@
       <div class="row-gap end">
         <button class="btn secondary" type="submit">Cancel</button>
         <button class="btn primary" type="button" id="join-go">Continue</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="lang-prefs-dialog" class="dialog">
+    <form method="dialog" id="lang-prefs-form">
+      <h2>Languages to listen for</h2>
+      <p class="muted small">Pick up to 10 languages the speech recogniser should consider on this device. Your own language is always included.</p>
+      <div id="lang-prefs-list" class="lang-grid"></div>
+      <div class="row-gap end">
+        <button class="btn secondary" type="submit">Cancel</button>
+        <button class="btn primary" type="button" id="lang-prefs-save">Save</button>
       </div>
     </form>
   </dialog>
