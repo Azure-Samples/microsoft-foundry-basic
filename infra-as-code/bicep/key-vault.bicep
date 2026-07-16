@@ -106,7 +106,7 @@ resource azureDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-prev
     workspaceId: logAnalyticsWorkspace.id
     logs: [
       {
-        category: 'AuditEvent'
+        categoryGroup: 'audit'
         enabled: true
       }
       {
