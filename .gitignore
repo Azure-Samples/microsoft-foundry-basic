@@ -317,6 +317,11 @@ _Pvt_Extensions
 .paket/paket.exe
 paket-files/
 
+# Local environment/configuration files (not tracked in git)
+*.local.env
+.env.local
+.env
+
 # FAKE - F# Make
 .fake/
 
