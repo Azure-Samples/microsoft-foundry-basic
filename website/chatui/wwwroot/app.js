@@ -153,10 +153,11 @@ const routes = [];
 const addRoute = (regex, handler) => routes.push({ regex, handler });
 
 addRoute(/^\/join\/(.+)$/, (m) => showJoin(decodeURIComponent(m[1])));
+addRoute(/^#\/talk$/, () => showTalk());
 addRoute(/^#\/chat(?:\/([0-9a-f-]+))?$/i, (m) => showChats(m[1] || null));
 addRoute(/^#\/meetings$/, () => showMeetings());
 addRoute(/^#\/meetings\/([0-9a-f-]+)$/i, (m) => showMeetingRoom(m[1]));
-addRoute(/^#?\/?$/, () => showMeetings());
+addRoute(/^#?\/?$/, () => showTalk());
 
 const currentPath = () => window.location.hash || window.location.pathname;
 async function route() {
@@ -171,12 +172,14 @@ window.addEventListener('hashchange', route);
 window.addEventListener('popstate', route);
 
 // -------- Screens --------
-const screens = ['loading', 'signin', 'chats', 'meetings', 'meeting-room', 'join'];
+const screens = ['loading', 'signin', 'talk', 'chats', 'meetings', 'meeting-room', 'join'];
 function show(name) {
   screens.forEach(s => document.getElementById('screen-' + s).hidden = s !== name);
   document.querySelectorAll('#tabs a').forEach(a => {
-    a.classList.toggle('active', (name === 'chats' && a.dataset.tab === 'chat')
-                              || (name.startsWith('meeting') && a.dataset.tab === 'meetings'));
+    a.classList.toggle('active',
+      (name === 'talk' && a.dataset.tab === 'talk') ||
+      (name === 'chats' && a.dataset.tab === 'chat') ||
+      (name.startsWith('meeting') && a.dataset.tab === 'meetings'));
   });
 }
 
@@ -602,6 +605,13 @@ document.getElementById('mic-toggle').addEventListener('click', async () => {
     const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(sttCandidates);
     targets.forEach(l => cfg.addTargetLanguage(l));
 
+    // Enable Continuous Language ID so Speech re-evaluates the language on
+    // every utterance instead of locking to whichever it picked first.
+    // Property name is a hard-coded string because different Speech SDK
+    // builds expose the enum under slightly different names.
+    cfg.setProperty('SpeechServiceConnection_LanguageIdMode', 'Continuous');
+    cfg.setProperty('SpeechServiceConnection_ContinuousLanguageIdPriority', 'Latency');
+
     const audio = sdk.AudioConfig.fromDefaultMicrophoneInput();
     const rec = sdk.TranslationRecognizer.FromConfig(cfg, autoDetect, audio);
     window.__recognizer = rec;
@@ -763,6 +773,133 @@ document.addEventListener('click', (e) => {
     else { toast('Unknown persona: ' + choice, 'error'); return; }
     location.reload();
   }
+});
+
+// -------- Talk screen (local live translator, no meeting/backend) --------
+let talkRecognizer = null;
+let talkLastForeign = null;
+
+async function showTalk() {
+  show('talk');
+  document.getElementById('talk-tts').checked = loadMeetingPrefs().ttsEnabled !== false;
+}
+
+function talkRender({ original, translated, sourceLang, targetLang, isMine, createdAt = new Date().toISOString() }) {
+  const container = document.getElementById('talk-timeline');
+  if (container.querySelector('.muted')) container.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'subtitle' + (isMine ? ' mine' : '');
+  el.innerHTML = `
+    <div class="who">${isMine ? 'You' : 'Them'} — ${escapeHtml(langName(sourceLang))} → ${escapeHtml(langName(targetLang))} · ${formatTime(createdAt)}</div>
+    <div class="translated">${escapeHtml(translated)}</div>
+    <div class="original">${escapeHtml(original)}</div>`;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function startTalk() {
+  const btn = document.getElementById('talk-mic');
+  const hint = document.getElementById('talk-hint');
+  const status = document.getElementById('talk-status');
+  if (talkRecognizer) { await stopTalk(); return; }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    toast('Microphone permission denied: ' + (err.message || err.name), 'error');
+    hint.textContent = 'Microphone permission denied.';
+    return;
+  }
+
+  try {
+    const sdk = await ensureSpeechSdk();
+    const cfg = await getSpeechConfig(sdk, true);
+    const myLang = state.me.preferredLanguage;
+
+    const prefs = loadMeetingPrefs();
+    const chosen = (prefs.candidates && prefs.candidates.length > 0) ? prefs.candidates : [myLang];
+    const sourceLangs = [...new Set([myLang, ...chosen])];
+    const sttCandidates = sourceLangs.map(l => langMap.get(l)?.stt).filter(Boolean).slice(0, 10);
+    if (sttCandidates.length === 0) sttCandidates.push(langMap.get(myLang)?.stt ?? 'en-US');
+
+    // Targets = every candidate language so translations are available in
+    // both directions no matter who speaks.
+    sourceLangs.forEach(l => cfg.addTargetLanguage(l));
+
+    const autoDetect = sdk.AutoDetectSourceLanguageConfig.fromLanguages(sttCandidates);
+    cfg.setProperty('SpeechServiceConnection_LanguageIdMode', 'Continuous');
+    cfg.setProperty('SpeechServiceConnection_ContinuousLanguageIdPriority', 'Latency');
+
+    const audio = sdk.AudioConfig.fromDefaultMicrophoneInput();
+    const rec = sdk.TranslationRecognizer.FromConfig(cfg, autoDetect, audio);
+
+    rec.recognizing = (_s, e) => {
+      if (e.result.text) hint.textContent = '🎧 …' + e.result.text.slice(-80);
+    };
+    rec.recognized = async (_s, e) => {
+      if (e.result.reason === sdk.ResultReason.NoMatch) { hint.textContent = 'No speech detected — try again.'; return; }
+      const original = e.result.text?.trim();
+      if (!original) return;
+
+      const detectedStt = sdk.AutoDetectSourceLanguageResult.fromResult(e.result)?.language;
+      const detectedLang = detectedStt
+        ? (LANGUAGES.find(l => l.stt === detectedStt)?.code ?? detectedStt.split('-')[0])
+        : myLang;
+
+      const isMine = detectedLang === myLang;
+      if (!isMine) talkLastForeign = detectedLang;
+
+      const targetLang = isMine ? (talkLastForeign ?? myLang) : myLang;
+      const translated = e.result.translations?.get(targetLang) ?? original;
+
+      hint.textContent = `🎙️ (${detectedLang}) ${original.slice(0, 60)}`;
+      talkRender({ original, translated, sourceLang: detectedLang, targetLang, isMine });
+
+      const ttsEnabled = document.getElementById('talk-tts').checked;
+      if (ttsEnabled && !isMine && translated) speak(translated, myLang).catch(() => {});
+    };
+    rec.canceled = (_s, e) => {
+      const detail = e.errorDetails || (e.reason === sdk.CancellationReason.EndOfStream ? 'end of stream' : String(e.reason));
+      toast('Speech canceled: ' + detail, 'error');
+      hint.textContent = 'Recognition stopped: ' + detail;
+      stopTalk();
+    };
+    rec.sessionStopped = () => { hint.textContent = 'Session stopped.'; stopTalk(); };
+
+    rec.startContinuousRecognitionAsync(
+      () => {
+        talkRecognizer = rec;
+        btn.textContent = '⏸ Stop';
+        btn.classList.add('recording');
+        status.textContent = 'Listening';
+        hint.textContent = '🎙️ Listening… speak now.';
+      },
+      (err) => {
+        toast('Failed to start speech: ' + err, 'error');
+        hint.textContent = 'Failed to start: ' + err;
+      }
+    );
+  } catch (e) { handleError(e); }
+}
+
+async function stopTalk() {
+  if (!talkRecognizer) return;
+  const rec = talkRecognizer;
+  talkRecognizer = null;
+  const btn = document.getElementById('talk-mic');
+  btn.textContent = '🎙️ Start talking';
+  btn.classList.remove('recording');
+  document.getElementById('talk-status').textContent = 'Idle';
+  try { rec.stopContinuousRecognitionAsync(() => rec.close(), () => rec.close()); } catch {}
+}
+
+document.getElementById('talk-mic').addEventListener('click', () => startTalk());
+document.getElementById('talk-langs').addEventListener('click', () => openLangPrefsDialog());
+document.getElementById('talk-tts').addEventListener('change', (e) => saveMeetingPrefs({ ttsEnabled: e.target.checked }));
+document.getElementById('talk-clear').addEventListener('click', () => {
+  document.getElementById('talk-timeline').innerHTML = '<div class="muted center">Nothing yet.</div>';
+  talkLastForeign = null;
 });
 
 // -------- Personal inbox (real-time chat delivery via Web PubSub) --------

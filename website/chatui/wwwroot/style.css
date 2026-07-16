@@ -114,6 +114,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 .lang-grid input[type="checkbox"]:checked + span { font-weight: 700; color: var(--accent); }
 .small { font-size: 13px; }
 .btn.small { padding: 6px 10px; font-size: 13px; }
+.talk-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.talk-hint { margin-bottom: 8px; }
 .center { text-align: center; }
 .hint { font-size: 12px; }
 

@@ -8,12 +8,13 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E🌐%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/style.css" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=11" defer></script>
+  <script type="module" src="/app.js?v=12" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="glyph">🌐</span><strong>AI Translator</strong></div>
     <nav class="tabs" id="tabs" hidden>
+      <a href="#/talk" data-tab="talk">Talk</a>
       <a href="#/chat" data-tab="chat">Chats</a>
       <a href="#/meetings" data-tab="meetings">Meetings</a>
     </nav>
@@ -39,6 +40,25 @@
         <summary>Or configure DevAuth (developers)</summary>
         <p class="hint">Set <code>DevAuth__Enabled=true</code> and related values in <code>appsettings.Development.json</code> or App Service settings.</p>
       </details>
+    </section>
+
+    <section class="screen" id="screen-talk" hidden>
+      <div class="row-between">
+        <h2>Live conversation</h2>
+        <span class="pill" id="talk-status">Idle</span>
+      </div>
+      <p class="muted small">
+        Point your microphone at the person you're speaking with. Their words appear translated into your language;
+        anything you say gets translated back into their language automatically.
+      </p>
+      <div class="talk-controls">
+        <button class="btn primary mic-btn" id="talk-mic">🎙️ Start talking</button>
+        <button class="btn secondary small" type="button" id="talk-langs">Languages to listen for…</button>
+        <label class="row-gap small"><input type="checkbox" id="talk-tts" checked /> Speak translations aloud</label>
+        <button class="btn secondary small" type="button" id="talk-clear">Clear</button>
+      </div>
+      <div class="talk-hint muted small" id="talk-hint">Press <strong>Start talking</strong> and grant microphone access.</div>
+      <div class="subtitles" id="talk-timeline"><div class="muted center">Nothing yet.</div></div>
     </section>
 
     <section class="screen" id="screen-chats" hidden>
