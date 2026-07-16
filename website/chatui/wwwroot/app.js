@@ -18,6 +18,7 @@ const LANGUAGES = [
   { code: 'no', name: 'Norwegian',         stt: 'nb-NO', voice: 'nb-NO-PernilleNeural' },
   { code: 'da', name: 'Danish',            stt: 'da-DK', voice: 'da-DK-ChristelNeural' },
   { code: 'fi', name: 'Finnish',           stt: 'fi-FI', voice: 'fi-FI-SelmaNeural' },
+  { code: 'ga', name: 'Irish',             stt: 'ga-IE', voice: 'ga-IE-OrlaNeural' },
   { code: 'tr', name: 'Turkish',           stt: 'tr-TR', voice: 'tr-TR-EmelNeural' },
   { code: 'el', name: 'Greek',             stt: 'el-GR', voice: 'el-GR-AthinaNeural' },
   { code: 'he', name: 'Hebrew',            stt: 'he-IL', voice: 'he-IL-HilaNeural' },
