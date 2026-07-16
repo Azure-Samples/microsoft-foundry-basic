@@ -28,6 +28,16 @@ builder.Services.AddOptions<TranslatorOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<KeyVaultOptions>()
+    .Bind(builder.Configuration.GetSection(KeyVaultOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<JoinTokenOptions>()
+    .Bind(builder.Configuration.GetSection(JoinTokenOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
 builder.Services.AddSingleton((provider) =>
@@ -81,6 +91,8 @@ builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
 builder.Services.AddSingleton<chatui.Services.TranslatorService>();
+builder.Services.AddSingleton<chatui.Services.JoinTokenService>();
+builder.Services.AddSingleton<chatui.Services.QrCodeService>();
 
 builder.Services.AddControllers();
 

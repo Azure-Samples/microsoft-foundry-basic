@@ -241,8 +241,10 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       SpeechResourceId: speech.id
       WebPubSubEndpoint: 'https://${webPubSub.properties.hostName}'
       WebPubSubHub: 'meetings'
-      KeyVaultUri: existingKeyVaultUri
-      JoinTokenSigningKeySecretName: 'join-token-signing-key'
+      KeyVault__Uri: existingKeyVaultUri
+      KeyVault__JoinTokenSigningKeySecretName: 'join-token-signing-key'
+      JoinToken__Audience: 'meeting-join'
+      JoinToken__LifetimeHours: '24'
       Postgres__Host: existingPostgresFqdn
       Postgres__Database: existingPostgresDatabase
       Postgres__Username: appServiceManagedIdentity.properties.clientId
