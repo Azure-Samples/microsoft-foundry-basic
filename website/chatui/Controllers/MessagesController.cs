@@ -18,7 +18,9 @@ namespace chatui.Controllers;
 public class MessagesController(
     IUserContext userContext,
     TranslatorDbContext dbContext,
-    TranslatorService translator) : ControllerBase
+    TranslatorService translator,
+    WebPubSubBroadcaster broadcaster,
+    ILogger<MessagesController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<MessageResponse>>> List(
@@ -95,7 +97,28 @@ public class MessagesController(
         dbContext.Messages.Add(message);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Ok(ToResponse(message));
+        var response = ToResponse(message);
+
+        // Best-effort real-time push to the peer's inbox so they see the
+        // message without polling. Persistence already succeeded — we swallow
+        // WPS failures and the client can still pick it up on next fetch.
+        try
+        {
+            await broadcaster.PublishInboxAsync(peer.Id, new
+            {
+                type = "message.new",
+                conversationId,
+                message = response,
+                fromUser = new { id = me.Id, displayName = me.DisplayName },
+                ts = message.CreatedAt,
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to push message {MessageId} to inbox {UserId}", message.Id, peer.Id);
+        }
+
+        return Ok(response);
     }
 
     private Task<Conversation?> LoadMyConversationAsync(Guid conversationId, Guid meId, CancellationToken ct) =>

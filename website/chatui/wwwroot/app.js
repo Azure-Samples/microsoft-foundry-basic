@@ -82,6 +82,7 @@ const api = {
   postTurn:    (id, b)          => api._req(`/api/meetings/${id}/turns`, { method: 'POST', body: b }),
   summary:     (id, lang)       => api._req(`/api/meetings/${id}/summary` + (lang ? `?lang=${lang}` : '')),
   makeSummary: (id, b)          => api._req(`/api/meetings/${id}/summary`, { method: 'POST', body: b }),
+  inboxToken:  ()               => api._req('/api/wps/inbox'),
   speechToken: ()               => api._req('/api/speech/token'),
 };
 
@@ -568,6 +569,36 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// -------- Personal inbox (real-time chat delivery via Web PubSub) --------
+let inboxClient = null;
+async function connectInbox() {
+  try {
+    await ensureWpsSdk();
+    const { url } = await api.inboxToken();
+    inboxClient = new WebPubSubClient.WebPubSubClient({ getClientAccessUrl: async () => url });
+    inboxClient.on('group-message', (e) => handleInboxMessage(e.message.data));
+    inboxClient.on('server-message', (e) => handleInboxMessage(e.message.data));
+    await inboxClient.start();
+  } catch (e) {
+    console.warn('Inbox WPS unavailable:', e);
+  }
+}
+function handleInboxMessage(payload) {
+  let msg;
+  try { msg = typeof payload === 'string' ? JSON.parse(payload) : payload; }
+  catch { return; }
+  if (msg.type !== 'message.new') return;
+  // If the thread for this conversation is open, append the new message live.
+  if (state.currentConversationId === msg.conversationId) {
+    const thread = document.getElementById('chat-thread');
+    if (thread.querySelector('.muted')) thread.innerHTML = '';
+    thread.appendChild(renderMsg(msg.message));
+    thread.scrollTop = thread.scrollHeight;
+  } else {
+    toast(`New message from ${msg.fromUser.displayName}`, 'success');
+  }
+}
+
 // -------- Boot --------
 async function boot() {
   populateLangSelect();
@@ -580,6 +611,7 @@ async function boot() {
   updateMeUi();
   document.getElementById('tabs').hidden = false;
   document.getElementById('me').hidden = false;
+  connectInbox(); // fire-and-forget; live push works when it connects.
   await route();
 }
 boot();

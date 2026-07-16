@@ -39,6 +39,22 @@ public sealed class WebPubSubBroadcaster
             groups: groups);
     }
 
+    /// <summary>
+    /// Client access URL pre-joined to the caller's personal inbox group.
+    /// Used by the personal-chat surface to push new messages to the recipient
+    /// without polling.
+    /// </summary>
+    public Uri GetInboxAccessUri(Guid userId)
+    {
+        return _client.GetClientAccessUri(
+            expiresAfter: TimeSpan.FromMinutes(_options.ClientTokenLifetimeMinutes),
+            userId: userId.ToString(),
+            groups: [InboxGroup(userId)]);
+    }
+
+    public Task PublishInboxAsync(Guid userId, object envelope, CancellationToken cancellationToken)
+        => SendJsonAsync(InboxGroup(userId), envelope, cancellationToken);
+
     public Task PublishTurnAsync(
         Guid meetingId,
         string targetLanguage,
@@ -61,4 +77,5 @@ public sealed class WebPubSubBroadcaster
     private static string PresenceGroup(Guid meetingId) => $"m:{meetingId}:presence";
     private static string LanguageGroup(Guid meetingId, string language) => $"m:{meetingId}:lang:{language}";
     private static string UserGroup(Guid meetingId, Guid userId) => $"m:{meetingId}:u:{userId}";
+    private static string InboxGroup(Guid userId) => $"inbox:{userId}";
 }
