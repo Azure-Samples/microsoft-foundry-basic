@@ -48,7 +48,22 @@ builder.Services.AddOptions<SpeechOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
+builder.Services.AddSingleton<TokenCredential>(sp =>
+{
+    // Explicitly pin to the user-assigned managed identity attached to this
+    // App Service. On App Service Linux with a single UAMI, DefaultAzureCredential
+    // still works but is much slower on cold-start and occasionally 400s on
+    // certain scopes (Translator's cognitiveservices.azure.com/.default has been
+    // reported to fail via the IMDS probe path). Using ManagedIdentityCredential
+    // with an explicit clientId is faster and skips the probe chain.
+    var clientId = builder.Configuration["AZURE_CLIENT_ID"];
+    if (!string.IsNullOrEmpty(clientId))
+    {
+        return new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
+    }
+    // Local dev fallback: full chain (VS, VS Code, Azure CLI, etc.).
+    return new DefaultAzureCredential();
+});
 
 builder.Services.AddSingleton((provider) =>
 {
@@ -100,7 +115,7 @@ builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
-builder.Services.AddSingleton<chatui.Services.TranslatorService>();
+builder.Services.AddHttpClient<chatui.Services.TranslatorService>();
 builder.Services.AddSingleton<chatui.Services.JoinTokenService>();
 builder.Services.AddSingleton<chatui.Services.QrCodeService>();
 builder.Services.AddSingleton<chatui.Services.WebPubSubBroadcaster>();
