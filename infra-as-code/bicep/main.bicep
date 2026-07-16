@@ -14,11 +14,23 @@ param baseName string
 @minLength(36)
 param yourPrincipalId string
 
+@description('Display / login name used for the Postgres Entra admin entry for the deployer. Purely cosmetic — actual auth is by object ID.')
+@minLength(1)
+param yourPrincipalDisplayName string = 'deployer'
+
+@description('Optional: Entra ID application (client) ID used to enable App Service Easy Auth v2. Leave empty to skip Easy Auth wiring for now.')
+param entraAppClientId string = ''
+
+@description('Optional: allowed audience for Easy Auth tokens. Defaults to api://<entraAppClientId>.')
+param entraAppAllowedAudience string = ''
+
 @description('Set to true to opt-out of deployment telemetry.')
 param telemetryOptOut bool = false
 
 // Customer Usage Attribution Id
 var varCuaid = '6aa4564a-a8b7-4ced-8e57-1043a41f4747'
+
+var appName = 'app-${baseName}'
 
 // ---- New resources ----
 
@@ -38,6 +50,12 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
   }
+}
+
+@description('User-assigned managed identity for the App Service. Created here (not inside web-app.bicep) so data-plane resources (Postgres, Key Vault, Web PubSub) can grant it roles before the web app itself is deployed. This breaks the otherwise-circular dependency where web-app needs Postgres FQDN in appsettings and Postgres needs the MI principal ID as an Entra admin.')
+resource appServiceManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: 'id-${appName}'
+  location: location
 }
 
 // Deploy the Microsoft Foundry account and Foundry Agent Service components.
@@ -72,7 +90,7 @@ module deployFoundryProject 'ai-foundry-project.bicep' = {
   }
 }
 
-// Deploy the Azure Web App resources for the chat UI.
+// Deploy the shared observability + translator/speech/data plane services.
 
 @description('Deploy Application Insights. Used by the Azure Web App to monitor the deployed application and connected to the Foundry project.')
 module deployApplicationInsights 'application-insights.bicep' = {
@@ -85,7 +103,70 @@ module deployApplicationInsights 'application-insights.bicep' = {
   }
 }
 
-@description('Deploy the web app for the front end demo UI. The web application will call into the Foundry Agent Service.')
+@description('Azure AI Translator — used for personal chat text translation.')
+module deployTranslator 'translator.bicep' = {
+  scope: resourceGroup()
+  name: 'translatorDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+  }
+}
+
+@description('Azure AI Speech — used for streaming Speech Translation in meetings and Neural TTS on clients.')
+module deploySpeech 'speech.bicep' = {
+  scope: resourceGroup()
+  name: 'speechDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+  }
+}
+
+@description('Azure Web PubSub — real-time fan-out of translated meeting turns to per-participant per-language groups.')
+module deployWebPubSub 'web-pubsub.bicep' = {
+  scope: resourceGroup()
+  name: 'webPubSubDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+  }
+}
+
+@description('Key Vault — stores the join-token signing key.')
+module deployKeyVault 'key-vault.bicep' = {
+  scope: resourceGroup()
+  name: 'keyVaultDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    deployerPrincipalId: yourPrincipalId
+    appServicePrincipalId: appServiceManagedIdentity.properties.principalId
+  }
+}
+
+@description('PostgreSQL Flexible Server with pgvector — application data, per-user history, and meeting transcripts.')
+module deployPostgres 'postgres.bicep' = {
+  scope: resourceGroup()
+  name: 'postgresDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    deployerPrincipalId: yourPrincipalId
+    deployerPrincipalDisplayName: yourPrincipalDisplayName
+    appServicePrincipalId: appServiceManagedIdentity.properties.principalId
+    appServicePrincipalClientId: appServiceManagedIdentity.properties.clientId
+  }
+}
+
+// Deploy the Azure Web App resources for the chat UI.
+
+@description('Deploy the web app for the front end demo UI. The web application will call into the Foundry Agent Service, Translator, Speech, Web PubSub, and Postgres — all via managed identity.')
 module deployWebApp 'web-app.bicep' = {
   scope: resourceGroup()
   name: 'webAppDeploy'
@@ -96,6 +177,15 @@ module deployWebApp 'web-app.bicep' = {
     existingWebApplicationInsightsResourceName: deployApplicationInsights.outputs.applicationInsightsName
     existingFoundryResourceName: deployFoundry.outputs.foundryName
     existingFoundryProjectName: deployFoundryProject.outputs.aiAgentProjectName
+    existingTranslatorResourceName: deployTranslator.outputs.translatorName
+    existingSpeechResourceName: deploySpeech.outputs.speechName
+    existingWebPubSubResourceName: deployWebPubSub.outputs.webPubSubName
+    existingKeyVaultUri: deployKeyVault.outputs.keyVaultUri
+    existingPostgresFqdn: deployPostgres.outputs.pgServerFqdn
+    existingPostgresDatabase: deployPostgres.outputs.pgDatabaseName
+    existingAppServiceManagedIdentityName: appServiceManagedIdentity.name
+    entraAppClientId: entraAppClientId
+    entraAppAllowedAudience: entraAppAllowedAudience
   }
 }
 
@@ -106,3 +196,12 @@ module customerUsageAttributionModule 'customerUsageAttribution/cuaIdResourceGro
   scope: resourceGroup()
   params: {}
 }
+
+// ---- Outputs ----
+
+@description('Post-deploy hint: seed the JWT signing secret into Key Vault before the app can issue meeting join tokens.')
+output postDeployHintKeyVault string = 'az keyvault secret set --vault-name ${deployKeyVault.outputs.keyVaultName} --name join-token-signing-key --value "$(openssl rand -base64 64)"'
+
+@description('Post-deploy hint: connect to Postgres with your Entra token to run the CREATE EXTENSION vector + migrations.')
+output postDeployHintPostgres string = 'PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv) psql "host=${deployPostgres.outputs.pgServerFqdn} dbname=${deployPostgres.outputs.pgDatabaseName} user=${yourPrincipalDisplayName} sslmode=require" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
+

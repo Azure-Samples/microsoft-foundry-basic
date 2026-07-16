@@ -33,9 +33,21 @@ az group create -l $LOCATION -n $RESOURCE_GROUP --tags "SECURITYCONTROL=IGNORE" 
 
 
 PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv | tr -d '\r')
+PRINCIPAL_NAME=$(az ad signed-in-user show --query userPrincipalName -o tsv | tr -d '\r')
 
-# This takes about 10 minutes to run.
+# Optional Entra ID app registration client ID for App Service Easy Auth v2.
+# Leave empty on first deploy; set once the app registration exists and redeploy.
+ENTRA_APP_CLIENT_ID="${ENTRA_APP_CLIENT_ID:-}"
+
+# This takes about 15-20 minutes to run.
 az deployment group create -f ./infra-as-code/bicep/main.bicep \
   -g $RESOURCE_GROUP \
   -p baseName=${BASE_NAME} \
-  -p yourPrincipalId=$PRINCIPAL_ID
+  -p yourPrincipalId=$PRINCIPAL_ID \
+  -p yourPrincipalDisplayName=$PRINCIPAL_NAME \
+  -p entraAppClientId=$ENTRA_APP_CLIENT_ID
+
+# Post-deploy hints are printed as the `postDeployHint*` outputs by main.bicep:
+#   - Seed the meeting join-token signing key into Key Vault.
+#   - Run `CREATE EXTENSION vector;` in the Postgres app database with your Entra token.
+#   - Then run EF Core migrations from the app to create the workload schema.
