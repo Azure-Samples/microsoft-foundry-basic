@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#b11f4b" />
+  <title>AI Translator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E🌐%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/web-pubsub-client@1.1.0/dist/web-pubsub-client.js" defer></script>
+  <script type="module" src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="glyph">🌐</span><strong>AI Translator</strong></div>
+    <nav class="tabs" id="tabs" hidden>
+      <a href="#/chat" data-tab="chat">Chats</a>
+      <a href="#/meetings" data-tab="meetings">Meetings</a>
+    </nav>
+    <div class="me" id="me" hidden>
+      <span id="me-name"></span>
+      <select id="me-language" title="Preferred language"></select>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- Loading skeleton until /api/me resolves. -->
+    <section class="screen center" id="screen-loading">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="muted">Loading your profile…</p>
+    </section>
+
+    <section class="screen" id="screen-signin" hidden>
+      <h1>Sign in required</h1>
+      <p>You need to sign in with your work account to use the translator.</p>
+      <a class="btn primary" href="/.auth/login/aad?post_login_redirect_url=/">Sign in with Microsoft</a>
+      <details class="muted">
+        <summary>Or configure DevAuth (developers)</summary>
+        <p class="hint">Set <code>DevAuth__Enabled=true</code> and related values in <code>appsettings.Development.json</code> or App Service settings.</p>
+      </details>
+    </section>
+
+    <section class="screen" id="screen-chats" hidden>
+      <div class="split">
+        <aside class="side">
+          <div class="side-head">
+            <h2>Peers</h2>
+            <input id="peer-search" placeholder="Search users…" />
+          </div>
+          <ul class="peer-list" id="peer-list"></ul>
+        </aside>
+        <section class="content">
+          <div class="thread" id="chat-thread">
+            <div class="muted center">Pick a peer to start.</div>
+          </div>
+          <form class="composer" id="chat-form" hidden>
+            <div class="composer-row">
+              <textarea id="chat-input" placeholder="Type in your language…" rows="2" required></textarea>
+              <button class="icon-btn" type="button" id="chat-mic" title="Dictate">🎙️</button>
+            </div>
+            <div class="composer-row muted">
+              <span>To <strong id="chat-peer-name"></strong> in <strong id="chat-peer-lang"></strong></span>
+              <button class="btn primary" type="submit">Send</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-meetings" hidden>
+      <div class="row-between">
+        <h2>My meetings</h2>
+        <div class="row-gap">
+          <button class="btn secondary" id="join-open">Join by link</button>
+          <button class="btn primary" id="meeting-new">Start on-site meeting</button>
+        </div>
+      </div>
+      <ul class="meeting-list" id="meeting-list"><li class="muted">Loading…</li></ul>
+    </section>
+
+    <section class="screen" id="screen-meeting-room" hidden>
+      <div class="row-between">
+        <h2 id="room-title">Meeting</h2>
+        <span class="pill" id="room-status">…</span>
+      </div>
+      <div class="room">
+        <aside class="room-side">
+          <h3>Participants</h3>
+          <ul class="participant-list" id="participant-list"></ul>
+          <hr />
+          <div class="mic-panel">
+            <button class="btn primary mic-btn" id="mic-toggle" disabled>🎙️ Start speaking</button>
+            <p class="muted hint" id="mic-hint">Loading speech capabilities…</p>
+          </div>
+          <div class="room-actions">
+            <button class="btn secondary" id="room-summary">Summarise so far</button>
+            <button class="btn danger" id="room-end" hidden>End meeting</button>
+            <button class="btn secondary" id="room-leave">Leave</button>
+          </div>
+        </aside>
+        <section class="stream">
+          <div class="subtitles" id="subtitles"><div class="muted center">Waiting for the first turn…</div></div>
+          <div id="summary-box" hidden>
+            <h3>Summary <span id="summary-lang" class="pill"></span></h3>
+            <p id="summary-body"></p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-join" hidden>
+      <h1>Join meeting</h1>
+      <p class="muted" id="join-meeting-hint">Choose the language you want to hear.</p>
+      <label class="stacked">
+        <span>Your language</span>
+        <select id="join-language"></select>
+      </label>
+      <button class="btn primary" id="join-submit">Join now</button>
+      <p class="muted small">You'll receive live translated subtitles and optional voice playback in your language.</p>
+    </section>
+  </main>
+
+  <dialog id="qr-dialog" class="dialog">
+    <form method="dialog">
+      <h2>Share this meeting</h2>
+      <img id="qr-img" alt="QR code with meeting join link" />
+      <p class="muted small">Or copy the link:</p>
+      <input id="qr-url" readonly onclick="this.select()" />
+      <div class="row-gap end">
+        <button class="btn secondary" id="qr-copy" type="button">Copy link</button>
+        <button class="btn primary" type="submit">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="join-dialog" class="dialog">
+    <form method="dialog" id="join-form">
+      <h2>Join by link</h2>
+      <label class="stacked">
+        <span>Paste join URL or token</span>
+        <input id="join-input" required autofocus />
+      </label>
+      <div class="row-gap end">
+        <button class="btn secondary" type="submit">Cancel</button>
+        <button class="btn primary" type="button" id="join-go">Continue</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
