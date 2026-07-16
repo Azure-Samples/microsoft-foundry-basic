@@ -104,6 +104,7 @@ builder.Services.AddSingleton<chatui.Services.TranslatorService>();
 builder.Services.AddSingleton<chatui.Services.JoinTokenService>();
 builder.Services.AddSingleton<chatui.Services.QrCodeService>();
 builder.Services.AddSingleton<chatui.Services.WebPubSubBroadcaster>();
+builder.Services.AddSingleton<chatui.Services.FoundryAgentService>();
 
 builder.Services.AddControllers();
 
