@@ -85,7 +85,7 @@ addRoute(/^#\/meetings$/, () => showMeetings());
 addRoute(/^#\/meetings\/([0-9a-f-]+)$/i, (m) => showMeetingRoom(m[1]));
 addRoute(/^#?\/?$/, () => showMeetings());
 
-const currentPath = () => window.location.pathname + window.location.hash;
+const currentPath = () => window.location.hash || window.location.pathname;
 async function route() {
   const path = currentPath();
   for (const r of routes) {
