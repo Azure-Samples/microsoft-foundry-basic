@@ -575,10 +575,20 @@ async function connectInbox() {
   try {
     await ensureWpsSdk();
     const { url } = await api.inboxToken();
-    inboxClient = new WebPubSubClient.WebPubSubClient({ getClientAccessUrl: async () => url });
+    // Use the non-reliable JSON protocol — the default Reliable protocol
+    // requires message-acking that our server-side SendToGroup doesn't
+    // participate in, so subscriptions silently drop messages.
+    inboxClient = new WebPubSubClient.WebPubSubClient({
+      getClientAccessUrl: async () => url,
+      protocol: WebPubSubClient.WebPubSubJsonProtocol(),
+    });
     inboxClient.on('group-message', (e) => handleInboxMessage(e.message.data));
     inboxClient.on('server-message', (e) => handleInboxMessage(e.message.data));
     await inboxClient.start();
+    // The `groups` param on the client-access URL only permits joining; the
+    // client must explicitly subscribe after connect for group-message
+    // delivery to fire.
+    await inboxClient.joinGroup(`inbox:${state.me.id}`);
   } catch (e) {
     console.warn('Inbox WPS unavailable:', e);
   }

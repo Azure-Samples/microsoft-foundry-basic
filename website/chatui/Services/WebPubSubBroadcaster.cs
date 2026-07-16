@@ -32,10 +32,16 @@ public sealed class WebPubSubBroadcaster
             LanguageGroup(meetingId, language),
             UserGroup(meetingId, userId),
         };
+        var roles = groups.SelectMany(g => new[]
+        {
+            $"webpubsub.joinLeaveGroup.{g}",
+            $"webpubsub.sendToGroup.{g}",
+        }).ToArray();
 
         return _client.GetClientAccessUri(
             expiresAfter: TimeSpan.FromMinutes(_options.ClientTokenLifetimeMinutes),
             userId: userId.ToString(),
+            roles: roles,
             groups: groups);
     }
 
@@ -46,10 +52,17 @@ public sealed class WebPubSubBroadcaster
     /// </summary>
     public Uri GetInboxAccessUri(Guid userId)
     {
+        var group = InboxGroup(userId);
+        var roles = new[]
+        {
+            $"webpubsub.joinLeaveGroup.{group}",
+            $"webpubsub.sendToGroup.{group}",
+        };
         return _client.GetClientAccessUri(
             expiresAfter: TimeSpan.FromMinutes(_options.ClientTokenLifetimeMinutes),
             userId: userId.ToString(),
-            groups: [InboxGroup(userId)]);
+            roles: roles,
+            groups: [group]);
     }
 
     public Task PublishInboxAsync(Guid userId, object envelope, CancellationToken cancellationToken)
