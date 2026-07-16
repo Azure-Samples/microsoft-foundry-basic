@@ -438,10 +438,12 @@ The following are out of scope for the first cut but explicitly designed-around 
 
 ---
 
-## 9. Open items to confirm before starting backend work
+## 9. Confirmed design decisions
 
-1. **Package versions.** Confirm we're OK using EF Core 10 preview and Npgsql for .NET 10 (still in preview at time of writing). Alternative: pin to .NET 9 LTS libs; adjust `chatui.csproj` `TargetFramework` back to `net9.0`.
-2. **QR generation.** Server-side via QRCoder, or client-side via `qrcode` npm and just return `joinUrl`? Client-side is smaller server surface; recommended.
-3. **Legacy `ChatController`.** Keep the Foundry-basic chat demo behind the same auth (fixed with owner check), or delete now?
-4. **Speech scope for browser.** Prefer `/api/speech/token` (short Entra bearer) over legacy Speech resource key. Confirm we never expose a Speech key even in dev.
-5. **Meeting title.** Required or optional? Right now marked optional.
+_Answered on 2026-07-16:_
+
+1. **.NET version**: **.NET 10 LTS** (already GA since November 2025, supported until November 2028). `chatui.csproj` stays on `net10.0`. EF Core 10 and Npgsql 10 are GA on this stack.
+2. **QR generation**: **Both**. Backend returns `joinUrl` **and** `qrPngDataUrl` (server-side PNG via QRCoder, ~2 KB) so the UI can render immediately without a second round-trip and email/print work without JavaScript. Client can also draw its own hi-DPI QR from `joinUrl` if it wants.
+3. **Legacy `ChatController` and `Views/Home/Index.cshtml`**: **Deleted**. They were leftovers from the Foundry-basic template. `FoundryAgentResolver` stays — reused by the new `FoundryAgentService` for addressee-hint and summary. Bing grounding stays on the agent side.
+4. **Speech access from the browser**: **Only Entra token via `/api/speech/token`**. Speech account already has `disableLocalAuth: true` in `speech.bicep`; no keys exist anywhere. Backend mints a bearer token scoped to `https://cognitiveservices.azure.com`, TTL ≈ 10 minutes, browser passes it to the Speech SDK.
+5. **`meetings.title`**: **Optional**. Backend fills a fallback like `"On-site meeting — 2026-07-16"` when omitted.
