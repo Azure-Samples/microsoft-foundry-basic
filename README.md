@@ -1,229 +1,180 @@
-# Foundry Agent Service chat basic reference implementation
+# AI Translator
 
-This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Foundry Agent Service as the orchestrator and Azure OpenAI foundation models. This repository directly supports the [Basic end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/basic-openai-e2e-chat) on Microsoft Learn.
+Multilingual chat and on-site meeting translator hosted on Azure and powered by Microsoft Foundry, Azure AI Translator, and Azure AI Speech.
 
-The reference implementation illustrates a basic example of a chat application. For a reference implementation that implements more enterprise requirements, please see the [Microsoft Foundry Agent Service baseline reference implementation](https://github.com/Azure-Samples/microsoft-foundry-baseline). That implementation addresses many of the [production readiness changes](https://github.com/search?q=repo%3AAzure-Samples%2Fmicrosoft-foundry-basic+%22Production+readiness+change%22&type=code) identified in this code.
+- **Personal chat** — pick a peer, type or dictate a message, it lands in the peer's language. Full history is stored per user; nobody sees anyone else's chats.
+- **On-site meetings** — the initiator creates a meeting and gets a QR code and a shareable link. Guests scan/click, sign in, pick their language, and start receiving real-time translated speech in their own language via Web PubSub + Neural TTS. Each participant only sees their language stream.
+- **Foundry agent** — Microsoft Foundry (`gpt-4.1`) is used only for meeting-summary generation and best-effort "who is being addressed" inference. Translation itself is done by Azure AI Translator (text) and Azure AI Speech Translation (voice) for lower latency and predictable cost.
+
+Full design (schema, REST API, WPS protocol, JWT claims, sequence diagrams): [`docs/translator-design.md`](./docs/translator-design.md).
 
 ## Architecture
 
-The implementation covers the following scenarios:
-
-- [Setting up Microsoft Foundry to host agents](#setting-up-microsoft-foundry-to-host-agents)
-- [Deploying an agent into Foundry Agent Service](#deploying-an-agent-into-foundry-agent-service)
-- [Invoking the agent from .NET code hosted in an Azure Web App](#invoking-the-agent-from-net-code-hosted-in-an-azure-web-app)
-
-### Setting up Microsoft Foundry to host agents
-
-Microsoft Foundry hosts the Foundry Agent Service as a capability. Foundry Agent Service's REST APIs are exposed as an internet facing endpoint.
-
-![Diagram that shows a basic chat architecture.](docs/media/basic-architecture.svg)
-
-*Download a [Visio file](docs/media/basic-architecture.vsdx) of this architecture.*
-
-#### Workflow
-
-The following workflow corresponds to the previous diagram:
-
-1. An application user interacts with a web application that contains chat functionality. They issue an HTTPS request to the App Service default domain on azurewebsites.net. This domain automatically points to the App Service built-in public IP address. The Transport Layer Security connection is established from the client directly to App Service. Azure fully manages the certificate.
-1. The App Service feature called Easy Auth ensures that the user who accesses the website is authenticated via Microsoft Entra ID.
-1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an agent in Microsoft Foundry through the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework), which calls the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs under the hood.
-1. Foundry Agent Service connects to Azure AI Search to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
-1. Foundry Agent Service connects to an Azure OpenAI model that's deployed in Foundry and sends the prompt that includes the relevant grounding data and chat context.
-1. Application Insights logs information about the original request to App Service and the call agent interactions.
-
-### Deploying an agent into Foundry Agent Service
-
-Agents can be created via the Foundry portal, [Foundry SDK](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Projects), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
-
-Ideally agents should be source-controlled and a versioned asset. You then can deploy agents in a coordinated way with the rest of your workload's code. In this deployment guide, you'll create an agent through the REST API to simulate a deployment pipeline which could have created the agent.
-
-### Invoking the agent from .NET code hosted in an Azure Web App
-
-A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's agent. The endpoint for the agent is exposed over internet through Foundry.
-
-Agent invocation at runtime uses a different API surface than agent lifecycle management. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) uses exclusively the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs, identifying the agent by name and version directly in the request body.
-
-## Deployment guide
-
-Follow these instructions to deploy this example to your Azure subscription, try out what you've deployed, and learn how to clean up those resources.
-
-### Prerequisites
-
-- An [Azure subscription](https://azure.microsoft.com/free/)
-
-  - The subscription must have all of the resource providers used in this deployment [registered](https://learn.microsoft.com/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider).
-
-    - `Microsoft.CognitiveServices`
-    - `Microsoft.Insights`
-    - `Microsoft.ManagedIdentity`
-    - `Microsoft.OperationalInsights`
-    - `Microsoft.Storage`
-
-  - The subscription must have the following quota available in the region you choose.
-
-    - App Service Plans: P1v3 (AZ), 3 instances
-    - OpenAI model: GPT-4.1 model deployment with 50k tokens per minute (TPM) capacity
-
-- Your deployment user must have the following permissions at the subscription scope.
-
-  - Ability to assign [Azure roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles) on newly created resource groups and resources. (E.g. `User Access Administrator` or `Owner`)
-  - Ability to purge deleted AI services resources. (E.g. `Contributor` or `Cognitive Services Contributor`)
-
-- The [Azure CLI installed](https://learn.microsoft.com/cli/azure/install-azure-cli)
-
-  If you're executing this from WSL, be sure the Azure CLI is installed in WSL and is not using the version installed in Windows. `which az` should show `/usr/bin/az`.
-
-### 1. :rocket: Deploy the infrastructure
-
-The following steps are required to deploy the infrastructure from the command line.
-
-1. In your shell, clone this repo and navigate to the root directory of this repository.
-
-   ```bash
-   git clone https://github.com/Azure-Samples/microsoft-foundry-basic
-   cd microsoft-foundry-basic
-   ```
-
-1. Log in and set your target subscription.
-
-   ```bash
-   az login
-   az account set --subscription xxxxx
-   ```
-
-1. Set the deployment location to one with available quota in your subscription.
-
-   This deployment has been tested in the following locations: `australiaeast`, `eastus`, `eastus2`, `francecentral`, `japaneast`, `southcentralus`, `swedencentral`, `switzerlandnorth`, or `uksouth`. You might be successful in other locations as well.
-
-   ```bash
-   LOCATION=eastus2
-   ```
-
-1. Set the base name value that will be used as part of the Azure resource names for the resources deployed in this solution.
-
-   ```bash
-   BASE_NAME=<base resource name, between 6 and 8 lowercase characters, all DNS names will include this text, so it must be unique.>
-   ```
-
-1. Create a resource group and deploy the infrastructure.
-
-   *There is an optional tracking ID on this deployment. To opt out of its use, add the following parameter to the deployment code below: `-p telemetryOptOut true`.*
-
-   ```bash
-   RESOURCE_GROUP=rg-chat-basic-${BASE_NAME}
-   az group create -l $LOCATION -n $RESOURCE_GROUP
-
-   PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv)
-
-   # This takes about 10 minutes to run.
-   az deployment group create -f ./infra-as-code/bicep/main.bicep \
-     -g $RESOURCE_GROUP \
-     -p baseName=${BASE_NAME} \
-     -p yourPrincipalId=$PRINCIPAL_ID
-   ```
-
-### 2. Deploy an agent in the Foundry Agent Service
-
-To test this scenario, you'll be deploying a prompt-based AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over the internet.
-
-1. Open the Azure portal to your subscription.
-
-1. Navigate to the Foundry project named **projchat** in your resource group and open the Foundry portal by clicking the **Go to Foundry portal** button.
-
-   This will take you directly into the 'Chat project'. Alternatively, you can find all your Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
-
-1. In the upper-right corner, if not already enabled, toggle **New Foundry** to switch into the Microsoft Foundry (new) portal.
-
-1. In the top-right corner, click **Build**. This opens by default the **Agents** blade in the side navigation, where you can view the available agents and create new ones.
-
-   The first time you access this section, the **Agents** list should be empty.
-
-1. Click **Create agent** button.
-
-1. From the Create an agent popup, enter 'baseline-chatbot-agent' as the Agent name.
-
-1. From the Playground panel, select the available deployment model named **agent-model**.
-
-1. Expand the Knowledge section, and click **Add** button.
-
-1. From the drop down list select the option **+ Set up a data source via tools**.
-
-1. From the popup window select the knowledge type 'Grounding with Bing Search'.
-
-1. Click **Add tool**.
-
-1. From the 'Grounding with Bing Search connection' drop down list choose the existing connection named 'bingaiagent', and click the **Add** button.
-
-1. Click **Save** buton at the top-right of the Agents' Playground panel.
-
-### 3. Test the agent from the Foundry portal in the playground
-
-Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent playground chat experience.
-
-1. Select the agent you just saved from the previous step named 'baseline-chatbot-agent'.
-
-1. Enter a question to the agent that would require grounding data through recent internet content, such as a notable recent event or the weather today in your location.
-
-1. A grounded response to your question should appear on the UI.
-
-### 4. Deploy the chat front-end web app
-
-Workloads build chat functionality into an application. Those interfaces usually call Foundry project endpoint invoking a particular agent. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
-
-1. Update the app configuration to use the agent you deployed.
-
-   ```bash
-   FOUNDRY_NAME="aif${BASE_NAME}"
-   FOUNDRY_PROJECT_NAME="projchat"
-   FOUNDRY_AGENTS_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/agents?api-version=2025-11-15-preview"
-
-   AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query last_id -o tsv)
-   AGENT_VERSION=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query 'data[-1].versions.latest.version' -o tsv)
-
-   echo "$AGENT_ID (version $AGENT_VERSION)"
-
-   APPSERVICE_NAME=app-$BASE_NAME
-   az webapp config appsettings set -g $RESOURCE_GROUP -n $APPSERVICE_NAME --settings AIAgentId=${AGENT_ID} AIAgentVersion=${AGENT_VERSION}
-   ```
-
-1. Deploy the ChatUI web app
-
-   ```bash
-   az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-url https://github.com/Azure-Samples/microsoft-foundry-basic/raw/refs/heads/main/website/chatui.zip
-   ```
-
-> Sometimes the prior command will fail with a `GatewayTimeout`. If you receive that error, you're safe to simply execute the command again.
-
-### 5. Try it out! Test the deployed application that calls into the Foundry Agent Service
-
-After the deployment is complete, you can try the deployed application by navigating to the Web App's URL in a web browser.
-
-You can also execute the following from your workstation. Unfortunately, this command does not reliably work from Azure Cloud Shell.
-
-```bash
-az webapp browse -g $RESOURCE_GROUP -n $APPSERVICE_NAME
+```mermaid
+flowchart LR
+  Client[Browser / Mobile web]
+  EA[App Service Easy Auth<br/>Entra ID]
+  API[Azure App Service<br/>.NET 10 API]
+  T[Azure AI Translator]
+  S[Azure AI Speech<br/>Speech Translation + TTS]
+  F[Foundry Agent Service<br/>gpt-4.1]
+  WPS[Azure Web PubSub]
+  PG[(PostgreSQL Flexible Server<br/>pgvector)]
+  KV[Azure Key Vault]
+
+  Client -->|/api/*| EA --> API
+  API -->|IOptions + MI| KV
+  API -->|SDK + Entra| T
+  API -->|Mint token| S
+  API -->|Runs agent| F
+  API -->|Publish groups| WPS
+  API -->|Npgsql + Entra token| PG
+  Client -.->|Speech SDK + short-lived Entra token| S
+  Client -.->|WebSocket, per-language group| WPS
 ```
 
-Once you're there, ask your solution a question. Your question should involve something that would only be known if the RAG process included context from Bing such as recent weather or events.
+**Data isolation** — every repository query is scoped by the current `userId` from Easy Auth. Meetings are additionally scoped by participant membership; a listener only ever receives their preferred-language group over Web PubSub. Original meeting audio never leaves the browser.
 
-## :broom: Clean up resources
+**All-Entra, no keys** — Translator, Speech, Web PubSub, Postgres, and Key Vault all authenticate the App Service user-assigned managed identity. `disableLocalAuth: true` is set on every service that supports it, and Postgres has `passwordAuth: Disabled`.
 
-Most Azure resources deployed in the prior steps will incur ongoing charges unless removed. Additionally, a few of the resources deployed go into a soft delete status which will restrict the ability to redeploy another resource with the same name and might not release quota. It's best to purge any soft deleted resources once you are done exploring. Use the following commands to delete the deployed resources and resource group and to purge each of the resources with soft delete.
+## Repository layout
 
-> **Note:** This will completely delete any data you may have included in this example and it will be unrecoverable.
-
-```bash
-# These deletes and purges take about 30 minutes to run.
-az group delete -n $RESOURCE_GROUP -y
-
-# Purge the soft delete resources
-az cognitiveservices account purge -g $RESOURCE_GROUP -l $LOCATION -n aif${BASE_NAME}
+```
+infra-as-code/bicep/     Azure resources (Foundry, Translator, Speech, Postgres,
+                         Web PubSub, Key Vault, App Service + Easy Auth)
+agents/                  Versioned Foundry agent JSON (translator-agent)
+docs/translator-design.md  Detailed design contract
+website/chatui/          .NET 10 API host (Auth, Data, Services, Controllers)
+scripts/deploy-infra.sh  Bicep deploy wrapper
 ```
 
-## Contributions
+## Prerequisites
 
-Please see our [Contributor guide](./CONTRIBUTING.md).
+- An [Azure subscription](https://azure.microsoft.com/free/) with these resource providers registered: `Microsoft.CognitiveServices`, `Microsoft.Insights`, `Microsoft.ManagedIdentity`, `Microsoft.OperationalInsights`, `Microsoft.Storage`, `Microsoft.DBforPostgreSQL`, `Microsoft.SignalRService`, `Microsoft.KeyVault`.
+- Sufficient quota in your chosen region:
+  - Foundry / OpenAI: `gpt-4.1` deployment (50k TPM).
+  - App Service Plan: B1 Linux (raise for load).
+  - Postgres Flexible Server: `Standard_B1ms` Burstable.
+  - Web PubSub: 1 unit Standard.
+- Deployment user permissions at subscription scope:
+  - `User Access Administrator` or `Owner` (to assign roles to the App Service managed identity).
+  - `Cognitive Services Contributor` (to purge soft-deleted accounts during cleanup).
+- Local tools: [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), `.NET 10 SDK`, `dotnet-ef` global tool (`dotnet tool install --global dotnet-ef --version 10.0.1`), `psql` (for one-time DB bootstrap), `openssl` (for the join-token seed).
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact <opencode@microsoft.com> with any additional questions or comments.
+## Deploy
 
-With :heart: from Azure Patterns & Practices, [Azure Architecture Center](https://azure.com/architecture).
+The workload has been tested in `swedencentral`. Other quota-available regions in the Foundry list (`eastus2`, `uksouth`, `westeurope`, `australiaeast`, ...) should also work.
+
+### 1. Deploy infrastructure
+
+```bash
+git clone <this-repo>
+cd ai-translator
+az login
+az account set --subscription <subId>
+
+cp scripts/deploy-infra.env scripts/deploy-infra.local.env
+# Edit deploy-infra.local.env to set BASE_NAME (6-8 lowercase chars, globally unique)
+# and, optionally, ENTRA_APP_CLIENT_ID once the app registration exists.
+
+bash scripts/deploy-infra.sh
+```
+
+The deployment takes 15–20 minutes. Watch for two output values at the end:
+- `postDeployHintKeyVault` — an `az keyvault secret set` command to seed the join-token signing key.
+- `postDeployHintPostgres` — a `psql` command to enable `pgvector` in the app database using your Entra token.
+
+### 2. Bootstrap the data plane
+
+Copy the printed commands and run them. Equivalents:
+
+```bash
+# 2a. Seed the meeting-join JWT signing key
+az keyvault secret set \
+  --vault-name kv-<basename> \
+  --name join-token-signing-key \
+  --value "$(openssl rand -base64 64)"
+
+# 2b. Enable pgvector in the app database
+PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv) \
+  psql "host=pg-<basename>.postgres.database.azure.com dbname=translator user=<your-upn> sslmode=require" \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# 2c. Apply EF Core migrations (same auth as above)
+export ConnectionStrings__DefaultConnection="Host=pg-<basename>.postgres.database.azure.com;Database=translator;Username=<your-upn>;Password=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv);SSL Mode=Require"
+dotnet ef database update --project website/chatui
+```
+
+### 3. Deploy the translator Foundry agent
+
+Follow [`agents/README.md`](./agents/README.md). Copy the returned agent id + version onto the App Service:
+
+```bash
+az webapp config appsettings set -g <resource-group> -n app-<basename> \
+  --settings AIAgentId=<agent-id> AIAgentVersion=<version>
+```
+
+### 4. Enable Easy Auth (optional but recommended)
+
+Create an Entra app registration for the App Service:
+
+1. In Portal → Entra ID → App registrations → New registration.
+2. Redirect URI: Web → `https://app-<basename>.azurewebsites.net/.auth/login/aad/callback`.
+3. Under **Expose an API**, set the Application ID URI to `api://<clientId>`.
+4. Copy the client ID and put it into `deploy-infra.local.env` as `ENTRA_APP_CLIENT_ID`.
+5. Re-run `scripts/deploy-infra.sh` — the second Bicep pass will wire `authsettingsV2` on the App Service so unauthenticated requests are redirected to Entra.
+
+### 5. Deploy the API
+
+```bash
+cd website/chatui
+dotnet publish -c Release -o ./publish
+cd publish && zip -r ../chatui.zip . && cd ..
+az webapp deploy -g <resource-group> -n app-<basename> --type zip --src-path chatui.zip
+```
+
+Browse `https://app-<basename>.azurewebsites.net/api/me` — after Easy Auth sign-in you should see your user profile as JSON, auto-provisioned in the `users` table.
+
+## Local development
+
+Local runs go against the deployed Azure services (no local Docker required).
+
+1. `az login` — provides the Entra token used by `DefaultAzureCredential` for Postgres, Translator, Speech, Web PubSub, and Key Vault access.
+2. Create `website/chatui/appsettings.Development.json` with resource endpoints for your deployed environment and, optionally, a `DevAuth` block so requests without an Easy Auth header impersonate a fixed user:
+
+   ```jsonc
+   {
+     "AIProjectEndpoint": "https://aif<basename>.services.ai.azure.com/api/projects/projchat",
+     "AIAgentId": "<translator-agent-id>",
+     "AIAgentVersion": "<version>",
+     "Translator": { "Endpoint": "https://trans<basename>.cognitiveservices.azure.com/", "Region": "swedencentral" },
+     "Speech": { "Endpoint": "https://swedencentral.api.cognitive.microsoft.com/", "Region": "swedencentral", "ResourceId": "/subscriptions/…/providers/Microsoft.CognitiveServices/accounts/speech<basename>" },
+     "WebPubSub": { "Endpoint": "https://wps-<basename>.webpubsub.azure.com", "Hub": "meetings", "ClientTokenLifetimeMinutes": 60 },
+     "KeyVault": { "Uri": "https://kv-<basename>.vault.azure.net/", "JoinTokenSigningKeySecretName": "join-token-signing-key" },
+     "JoinToken": { "Audience": "meeting-join", "LifetimeHours": 24 },
+     "Postgres": { "Host": "pg-<basename>.postgres.database.azure.com", "Database": "translator", "Username": "<your-upn>" },
+     "DevAuth": { "Enabled": true, "EntraObjectId": "00000000-0000-0000-0000-000000000001", "DisplayName": "Local Dev", "Email": "dev@local", "PreferredLanguage": "en" }
+   }
+   ```
+
+3. `cd website/chatui && dotnet run` — the API listens on `http://localhost:5000` (or the port shown in the console). `curl http://localhost:5000/api/me` returns the dev user.
+
+`DevAuth` is silently ignored outside the `Development` environment.
+
+## Clean up
+
+```bash
+az group delete -n <resource-group> -y
+
+# Purge soft-deleted Cognitive Services and Key Vault so the same base name can be reused
+az cognitiveservices account purge -g <resource-group> -l <location> -n aif<basename>
+az cognitiveservices account purge -g <resource-group> -l <location> -n trans<basename>
+az cognitiveservices account purge -g <resource-group> -l <location> -n speech<basename>
+az keyvault purge -n kv-<basename> -l <location>
+```
+
+Postgres and Web PubSub delete synchronously with the resource group and do not need purging.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md). This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/); see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact <opencode@microsoft.com> with questions.
