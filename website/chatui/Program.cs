@@ -20,18 +20,7 @@ builder.Services.AddSingleton((provider) =>
 
 builder.Services.AddSingleton<FoundryAgentResolver>();
 
-builder.Services.AddControllersWithViews();
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAllOrigins",
-        builder =>
-        {
-            builder.AllowAnyOrigin()
-                   .AllowAnyMethod()
-                   .AllowAnyHeader();
-        });
-});
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -39,10 +28,6 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
-
-app.UseCors("AllowAllOrigins");
+app.MapControllers();
 
 app.Run();
