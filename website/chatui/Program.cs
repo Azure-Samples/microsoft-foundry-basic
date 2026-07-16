@@ -38,6 +38,11 @@ builder.Services.AddOptions<JoinTokenOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services.AddOptions<WebPubSubOptions>()
+    .Bind(builder.Configuration.GetSection(WebPubSubOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
 builder.Services.AddSingleton((provider) =>
@@ -93,6 +98,7 @@ builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
 builder.Services.AddSingleton<chatui.Services.TranslatorService>();
 builder.Services.AddSingleton<chatui.Services.JoinTokenService>();
 builder.Services.AddSingleton<chatui.Services.QrCodeService>();
+builder.Services.AddSingleton<chatui.Services.WebPubSubBroadcaster>();
 
 builder.Services.AddControllers();
 

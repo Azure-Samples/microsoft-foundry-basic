@@ -239,8 +239,9 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       SpeechEndpoint: speech.properties.endpoint
       SpeechRegion: speech.location
       SpeechResourceId: speech.id
-      WebPubSubEndpoint: 'https://${webPubSub.properties.hostName}'
-      WebPubSubHub: 'meetings'
+      WebPubSub__Endpoint: 'https://${webPubSub.properties.hostName}'
+      WebPubSub__Hub: 'meetings'
+      WebPubSub__ClientTokenLifetimeMinutes: '60'
       KeyVault__Uri: existingKeyVaultUri
       KeyVault__JoinTokenSigningKeySecretName: 'join-token-signing-key'
       JoinToken__Audience: 'meeting-join'
