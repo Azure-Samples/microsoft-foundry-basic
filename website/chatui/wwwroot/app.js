@@ -485,26 +485,71 @@ document.getElementById('tts-toggle').addEventListener('change', (e) => {
   saveMeetingPrefs({ ttsEnabled: e.target.checked });
 });
 document.getElementById('lang-prefs-open').addEventListener('click', () => openLangPrefsDialog());
-document.getElementById('lang-prefs-save').addEventListener('click', () => {
-  const picked = [...document.querySelectorAll('#lang-prefs-list input:checked')].map(c => c.value);
-  if (picked.length > 10) { toast('At most 10 languages, please.', 'error'); return; }
-  saveMeetingPrefs({ candidates: picked });
-  document.getElementById('lang-prefs-dialog').close();
-  toast('Language preferences saved. Press Stop and Start speaking again to apply.', 'success');
-});
+// Legacy 'lang-prefs-save' is now wired inline inside openLangPrefsDialog so
+// it captures the current picker state closure.
 function openLangPrefsDialog() {
   const list = document.getElementById('lang-prefs-list');
+  const search = document.getElementById('lang-search');
+  const count = document.getElementById('lang-count');
   const prefs = loadMeetingPrefs();
   const myLang = state.me?.preferredLanguage ?? 'en';
-  const currentSet = new Set(prefs.candidates && prefs.candidates.length > 0
+  const initial = new Set(prefs.candidates && prefs.candidates.length > 0
     ? prefs.candidates
     : (state.meeting?.participants.map(p => p.language) ?? [myLang]));
-  currentSet.add(myLang);
-  list.innerHTML = LANGUAGES.map(l => {
-    const disabled = l.code === myLang ? 'disabled' : '';
-    const checked = currentSet.has(l.code) ? 'checked' : '';
-    return `<label><input type="checkbox" value="${l.code}" ${checked} ${disabled} /><span>${l.name}</span></label>`;
-  }).join('');
+  initial.add(myLang);
+
+  function render(filter = '') {
+    const q = filter.trim().toLowerCase();
+    list.innerHTML = LANGUAGES
+      .filter(l => !q || l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+      .map(l => {
+        const isMine = l.code === myLang;
+        const checked = initial.has(l.code) ? 'checked' : '';
+        const disabled = isMine ? 'disabled' : '';
+        const cls = (initial.has(l.code) ? 'selected ' : '') + (isMine ? 'disabled' : '');
+        return `<label class="${cls}" data-code="${l.code}">
+          <span class="lang-name">${escapeHtml(l.name)}${isMine ? ' <span class="muted small">(your language)</span>' : ''}</span>
+          <input type="checkbox" value="${l.code}" ${checked} ${disabled} />
+          <span class="lang-check"></span>
+        </label>`;
+      }).join('');
+    updateCount();
+  }
+  function updateCount() {
+    count.textContent = `${initial.size} / 10`;
+    count.classList.toggle('accent', initial.size > 10);
+  }
+  render();
+  search.value = '';
+  search.oninput = () => render(search.value);
+  list.onclick = (e) => {
+    const label = e.target.closest('label[data-code]');
+    if (!label) return;
+    e.preventDefault();
+    const code = label.dataset.code;
+    if (code === myLang) return;
+    const cb = label.querySelector('input');
+    if (initial.has(code)) {
+      initial.delete(code);
+      cb.checked = false;
+      label.classList.remove('selected');
+    } else {
+      if (initial.size >= 10) {
+        toast('At most 10 languages can be active at once.', 'error');
+        return;
+      }
+      initial.add(code);
+      cb.checked = true;
+      label.classList.add('selected');
+    }
+    updateCount();
+  };
+  document.getElementById('lang-prefs-save').onclick = () => {
+    saveMeetingPrefs({ candidates: [...initial] });
+    document.getElementById('lang-prefs-dialog').close();
+    syncTalkControls();
+    toast('Language preferences saved. Press Stop and Start talking again to apply.', 'success');
+  };
   document.getElementById('lang-prefs-dialog').showModal();
 }
 
@@ -854,7 +899,26 @@ let talkLastForeign = null;
 
 async function showTalk() {
   show('talk');
-  document.getElementById('talk-tts').checked = loadMeetingPrefs().ttsEnabled !== false;
+  syncTalkControls();
+}
+
+function syncTalkControls() {
+  const prefs = loadMeetingPrefs();
+  const myLang = state.me?.preferredLanguage ?? 'en';
+  const chosen = (prefs.candidates && prefs.candidates.length > 0)
+    ? prefs.candidates
+    : [myLang];
+  const names = chosen.map(c => langName(c)).filter(Boolean);
+  const desc = names.length <= 4
+    ? names.join(', ')
+    : names.slice(0, 3).join(', ') + ` and ${names.length - 3} more`;
+  document.getElementById('talk-langs-desc').textContent = desc || 'Tap to choose which languages to listen for';
+  const on = prefs.ttsEnabled !== false;
+  const toggle = document.querySelector('#talk-tts .tool-toggle');
+  if (toggle) {
+    toggle.dataset.on = String(on);
+    toggle.textContent = on ? 'On' : 'Off';
+  }
 }
 
 function talkRender({ original, translated, sourceLang, targetLang, isMine, createdAt = new Date().toISOString() }) {
@@ -943,7 +1007,7 @@ async function startTalk() {
     rec.startContinuousRecognitionAsync(
       () => {
         talkRecognizer = rec;
-        btn.textContent = '⏸ Stop';
+        btn.querySelector('.mic-label').textContent = 'Stop talking';
         btn.classList.add('recording');
         status.textContent = 'Listening';
         hint.textContent = '🎙️ Listening… speak now.';
@@ -961,7 +1025,7 @@ async function stopTalk() {
   const rec = talkRecognizer;
   talkRecognizer = null;
   const btn = document.getElementById('talk-mic');
-  btn.textContent = '🎙️ Start talking';
+  btn.querySelector('.mic-label').textContent = 'Start talking';
   btn.classList.remove('recording');
   document.getElementById('talk-status').textContent = 'Idle';
   try { rec.stopContinuousRecognitionAsync(() => rec.close(), () => rec.close()); } catch {}
@@ -969,7 +1033,11 @@ async function stopTalk() {
 
 document.getElementById('talk-mic').addEventListener('click', () => startTalk());
 document.getElementById('talk-langs').addEventListener('click', () => openLangPrefsDialog());
-document.getElementById('talk-tts').addEventListener('change', (e) => saveMeetingPrefs({ ttsEnabled: e.target.checked }));
+document.getElementById('talk-tts').addEventListener('click', () => {
+  const prefs = loadMeetingPrefs();
+  saveMeetingPrefs({ ttsEnabled: prefs.ttsEnabled === false });
+  syncTalkControls();
+});
 document.getElementById('talk-clear').addEventListener('click', () => {
   document.getElementById('talk-timeline').innerHTML = '<div class="muted center">Nothing yet.</div>';
   talkLastForeign = null;

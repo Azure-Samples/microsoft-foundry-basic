@@ -101,21 +101,117 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 .pill { padding: 3px 10px; border-radius: 999px; background: var(--surface-soft); border: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .pill.accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .muted { color: var(--text-muted); }
-.lang-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 6px;
-  margin: 12px 0;
-  max-height: 50vh;
-  overflow: auto;
+/* Big microphone button — the primary action on the Talk screen. */
+.mic-big {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 60px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
 }
-.lang-grid label { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
-.lang-grid label:hover { background: var(--surface-soft); }
-.lang-grid input[type="checkbox"]:checked + span { font-weight: 700; color: var(--accent); }
+.mic-big:hover { background: var(--accent-hover); }
+.mic-big.recording { background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
+.mic-icon { font-size: 22px; }
+@keyframes pulse { 0%,100% { box-shadow: 0 4px 14px rgba(220,38,38,0.35); } 50% { box-shadow: 0 4px 22px rgba(220,38,38,0.6); } }
+
+.talk-hint { margin: 10px 2px 14px; text-align: center; min-height: 20px; }
+
+/* Toolbar with big tap targets — Languages, Speak translations, Clear */
+.talk-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.tool-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  min-height: 60px;
+  cursor: pointer;
+}
+.tool-row:hover { background: var(--surface-soft); }
+.tool-icon { font-size: 22px; text-align: center; }
+.tool-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tool-title { font-weight: 700; font-size: 15px; }
+.tool-desc { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+.tool-chev { font-size: 24px; color: var(--text-muted); line-height: 1; }
+.tool-toggle {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.tool-toggle[data-on="false"] {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* Language picker — full-width rows, big tap targets, native checkbox hidden */
+.lang-search-row { display: flex; gap: 8px; align-items: center; margin: 10px 0 8px; }
+.lang-search-row input { flex: 1; min-height: 42px; }
+.lang-list { display: flex; flex-direction: column; gap: 4px; max-height: 55vh; overflow: auto; margin: 8px 0; padding-right: 4px; }
+.lang-list label {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 15px;
+  min-height: 48px;
+}
+.lang-list label:hover { background: var(--surface-soft); }
+.lang-list label input { position: absolute; opacity: 0; pointer-events: none; }
+.lang-list .lang-check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--accent-fg);
+  font-size: 16px;
+  font-weight: 700;
+}
+.lang-list label input:checked ~ .lang-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.lang-list label input:checked ~ .lang-check::after { content: '✓'; }
+.lang-list label input:disabled ~ .lang-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 0.7;
+}
+.lang-list label input:disabled ~ .lang-check::after { content: '✓'; }
+.lang-list label.selected { border-color: var(--accent); background: var(--accent-soft); }
+.lang-list label.disabled { opacity: 0.7; cursor: not-allowed; }
+.lang-list .lang-name { display: block; overflow-wrap: anywhere; }
+
 .small { font-size: 13px; }
 .btn.small { padding: 6px 10px; font-size: 13px; }
 .talk-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-.talk-hint { margin-bottom: 8px; }
 .center { text-align: center; }
 .hint { font-size: 12px; }
 

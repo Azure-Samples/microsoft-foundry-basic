@@ -8,7 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E🌐%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/style.css" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=16" defer></script>
+  <script type="module" src="/app.js?v=17" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -51,13 +51,39 @@
         Point your microphone at the person you're speaking with. Their words appear translated into your language;
         anything you say gets translated back into their language automatically.
       </p>
-      <div class="talk-controls">
-        <button class="btn primary mic-btn" id="talk-mic">🎙️ Start talking</button>
-        <button class="btn secondary small" type="button" id="talk-langs">Languages to listen for…</button>
-        <label class="row-gap small"><input type="checkbox" id="talk-tts" checked /> Speak translations aloud</label>
-        <button class="btn secondary small" type="button" id="talk-clear">Clear</button>
-      </div>
+
+      <button class="mic-big" id="talk-mic">
+        <span class="mic-icon">🎙️</span>
+        <span class="mic-label">Start talking</span>
+      </button>
       <div class="talk-hint muted small" id="talk-hint">Press <strong>Start talking</strong> and grant microphone access.</div>
+
+      <div class="talk-toolbar">
+        <button class="tool-row" type="button" id="talk-langs">
+          <span class="tool-icon">🌐</span>
+          <span class="tool-body">
+            <span class="tool-title">Languages</span>
+            <span class="tool-desc" id="talk-langs-desc">Tap to choose which languages to listen for</span>
+          </span>
+          <span class="tool-chev">›</span>
+        </button>
+        <button class="tool-row" type="button" id="talk-tts">
+          <span class="tool-icon">🔈</span>
+          <span class="tool-body">
+            <span class="tool-title">Speak translations</span>
+            <span class="tool-desc">Play voice replies through your speaker</span>
+          </span>
+          <span class="tool-toggle" data-on="true">On</span>
+        </button>
+        <button class="tool-row" type="button" id="talk-clear">
+          <span class="tool-icon">🧹</span>
+          <span class="tool-body">
+            <span class="tool-title">Clear conversation</span>
+            <span class="tool-desc">Remove all messages from this screen</span>
+          </span>
+        </button>
+      </div>
+
       <div class="subtitles" id="talk-timeline"><div class="muted center">Nothing yet.</div></div>
     </section>
 
@@ -175,8 +201,12 @@
   <dialog id="lang-prefs-dialog" class="dialog">
     <form method="dialog" id="lang-prefs-form">
       <h2>Languages to listen for</h2>
-      <p class="muted small">Pick up to 10 languages the speech recogniser should consider on this device. Your own language is always included.</p>
-      <div id="lang-prefs-list" class="lang-grid"></div>
+      <p class="muted small">Pick up to 10 languages that might be spoken. Your own language is always included.</p>
+      <div class="lang-search-row">
+        <input type="search" id="lang-search" placeholder="Search languages…" autocomplete="off" />
+        <span class="pill" id="lang-count">0 / 10</span>
+      </div>
+      <div id="lang-prefs-list" class="lang-list"></div>
       <div class="row-gap end">
         <button class="btn secondary" type="submit">Cancel</button>
         <button class="btn primary" type="button" id="lang-prefs-save">Save</button>
