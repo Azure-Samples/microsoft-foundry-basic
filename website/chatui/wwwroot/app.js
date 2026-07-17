@@ -131,12 +131,23 @@ class AuthError extends Error {}
 class ApiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 
 // -------- Toasts --------
-const toast = (msg, kind = 'info') => {
+const toast = (msg, kind = 'info', detail = '') => {
   const el = document.createElement('div');
   el.className = 'toast ' + kind;
-  el.textContent = msg;
+  const main = document.createElement('div');
+  main.textContent = msg;
+  el.appendChild(main);
+  if (detail) {
+    const d = document.createElement('div');
+    d.className = 'toast-detail';
+    d.textContent = detail;
+    el.appendChild(d);
+  }
   document.getElementById('toasts').appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  // Longer stay-on-screen for errors with detail so people can read the code.
+  const ttl = kind === 'error' ? (detail ? 12000 : 6000) : 4000;
+  setTimeout(() => el.remove(), ttl);
+  el.addEventListener('click', () => el.remove());
 };
 
 // -------- State --------
@@ -726,6 +737,7 @@ async function speak(text, lang) {
   if (!text) return;
   const langInfo = langMap.get(lang);
   const bcp47 = langInfo?.stt ?? lang;
+  let azureErr = null;
 
   // Try Azure Neural voice first for quality; fall back to browser
   // SpeechSynthesis if the SDK path errors out (expired token, quota,
@@ -742,33 +754,52 @@ async function speak(text, lang) {
             synth.close();
             resolve();
           } else {
-            const err = new Error(result.errorDetails || ('reason=' + result.reason));
+            const cd = sdk.CancellationDetails?.fromResult ? sdk.CancellationDetails.fromResult(result) : null;
+            const errorCode = cd?.ErrorCode ?? cd?.errorCode ?? '';
+            const errorDetails = result.errorDetails || cd?.errorDetails || '';
+            const err = new Error(`Azure TTS ${errorCode ? '['+errorCode+'] ' : ''}${errorDetails || ('reason=' + result.reason)}`);
             synth.close();
             reject(err);
           }
         },
-        (err) => { synth.close(); reject(new Error(String(err))); }
+        (err) => { synth.close(); reject(new Error('Azure TTS: ' + String(err))); }
       );
     });
     return;
   } catch (e) {
+    azureErr = e;
     console.warn('[TTS] Azure Neural failed for', lang, '-', e.message, '— falling back to browser TTS.');
   }
 
   // Browser fallback (System Speech Synthesis)
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) {
+    toast('Voice output unavailable on this device (' + lang + ')', 'error', azureErr?.message ?? 'No SpeechSynthesis API');
+    return;
+  }
   try {
     // Some browsers need a fresh voice list before Utterance works.
     if (window.speechSynthesis.getVoices().length === 0) {
       await new Promise(r => { window.speechSynthesis.onvoiceschanged = r; setTimeout(r, 500); });
     }
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang?.toLowerCase() === bcp47.toLowerCase())
+      ?? voices.find(v => v.lang?.toLowerCase().startsWith(bcp47.slice(0, 2).toLowerCase()));
+    if (!preferred) {
+      toast(`No system voice for ${langInfo?.name ?? lang}`, 'error',
+        `Install a ${lang} voice in your OS settings. Azure error: ${azureErr?.message ?? 'n/a'}`);
+      return;
+    }
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = bcp47;
-    const preferred = window.speechSynthesis.getVoices().find(v => v.lang?.toLowerCase().startsWith(bcp47.slice(0, 2).toLowerCase()));
-    if (preferred) u.voice = preferred;
+    u.lang = preferred.lang;
+    u.voice = preferred;
+    u.onerror = (ev) => {
+      toast(`Voice playback error (${lang})`, 'error',
+        `Browser: ${ev.error ?? 'unknown'}. Azure fallback triggered because: ${azureErr?.message ?? 'n/a'}`);
+    };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   } catch (e) {
+    toast(`Voice output failed (${lang})`, 'error', `${e.message}. Azure fallback triggered because: ${azureErr?.message ?? 'n/a'}`);
     console.warn('[TTS] Browser fallback also failed:', e);
   }
 }
@@ -1029,7 +1060,8 @@ function updateMeUi() {
 function handleError(e) {
   console.error(e);
   const msg = e instanceof ApiError ? `${e.status}: ${e.message}` : (e.message ?? String(e));
-  toast(msg, 'error');
+  const detail = e?.stack ? String(e.stack).split('\n').slice(0, 3).join(' | ') : '';
+  toast(msg, 'error', detail);
 }
 
 // -------- Utils --------

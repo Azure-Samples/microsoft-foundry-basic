@@ -190,9 +190,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* Toasts */
 .toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
-.toast { padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); animation: fade 200ms; }
+.toast { padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); animation: fade 200ms; max-width: 380px; cursor: pointer; }
 .toast.error { border-color: var(--danger); color: var(--danger); }
 .toast.success { border-color: var(--success); }
+.toast-detail { margin-top: 6px; font-size: 11px; color: var(--text-muted); font-family: Consolas, "Courier New", Courier, monospace; word-break: break-word; white-space: pre-wrap; opacity: 0.9; }
 
 @media (max-width: 900px) {
   main { padding: 12px; }
