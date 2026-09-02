@@ -20,7 +20,7 @@ public class ConversationsController(
     public async Task<ActionResult<IReadOnlyList<ConversationSummary>>> List(
         CancellationToken cancellationToken)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
 
         var conversations = await dbContext.Conversations
             .AsNoTracking()
@@ -57,7 +57,7 @@ public class ConversationsController(
         [FromBody] CreateConversationRequest request,
         CancellationToken cancellationToken)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
 
         if (request.PeerId == me.Id)
         {

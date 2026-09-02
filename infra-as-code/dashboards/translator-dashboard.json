@@ -1,0 +1,235 @@
+{
+  "properties": {
+    "lenses": [
+      {
+        "order": 0,
+        "parts": [
+          {
+            "position": { "x": 0, "y": 0, "colSpan": 12, "rowSpan": 1 },
+            "metadata": {
+              "type": "Extension/HubsExtension/PartType/MarkdownPart",
+              "inputs": [],
+              "settings": {
+                "content": {
+                  "settings": {
+                    "content": "## AI Translator — cost & health\n\n**Live:** [app-aitr7631](https://app-aitr7631-aphxamaxhygbdxek.swedencentral-01.azurewebsites.net) · **App Insights:** appi-aitr7631 · **Region:** Sweden Central\n\nMetrics `aitr.*` come from OpenTelemetry (Azure Monitor Distro). Dependencies `translate`, `tts.synth`, `foundry.*` are OTel spans.",
+                    "title": "",
+                    "subtitle": "",
+                    "markdownSource": 1
+                  }
+                }
+              }
+            }
+          },
+
+          {
+            "position": { "x": 0, "y": 1, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "25e68f10-165e-406c-8885-20b709434cd3", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "customMetrics\n| where name endswith \".duration\" and name startswith \"aitr.\"\n| summarize p50 = percentile(value, 50), p95 = percentile(value, 95), p99 = percentile(value, 99) by bin(timestamp, 5m), name\n| project timestamp, name, p50, p95, p99\n| mv-expand entry = pack(\"p50\", p50, \"p95\", p95, \"p99\", p99)\n| extend Percentile = tostring(bag_keys(todynamic(entry))[0])\n| extend DurationMs = todouble(entry[Percentile])\n| project timestamp, Series = strcat(name, \" · \", Percentile), DurationMs\n", "isOptional": true },
+                { "name": "ControlType", "value": "FrameControlChart", "isOptional": true },
+                { "name": "SpecificChart", "value": "Line", "isOptional": true },
+                { "name": "PartTitle", "value": "Latency (p50 / p95 / p99, ms)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "Translate · TTS · Foundry", "isOptional": true },
+                { "name": "Dimensions", "value": { "xAxis": { "name": "timestamp", "type": "datetime" }, "yAxis": [{ "name": "DurationMs", "type": "real" }], "splitBy": [{ "name": "Series", "type": "string" }], "aggregation": "Sum" }, "isOptional": true },
+                { "name": "LegendOptions", "value": { "isEnabled": true, "position": "Bottom" }, "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": false, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 6, "y": 1, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "309c543c-645c-4d8b-ac01-aa2f77f81ceb", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "customMetrics\n| where name in (\"aitr.translate.calls\", \"aitr.tts.calls\", \"aitr.foundry.calls\")\n| summarize Calls = sum(valueSum) by bin(timestamp, 5m), name\n", "isOptional": true },
+                { "name": "ControlType", "value": "FrameControlChart", "isOptional": true },
+                { "name": "SpecificChart", "value": "StackedColumn", "isOptional": true },
+                { "name": "PartTitle", "value": "Call volume (per 5 min)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "Translate · TTS · Foundry", "isOptional": true },
+                { "name": "Dimensions", "value": { "xAxis": { "name": "timestamp", "type": "datetime" }, "yAxis": [{ "name": "Calls", "type": "long" }], "splitBy": [{ "name": "name", "type": "string" }], "aggregation": "Sum" }, "isOptional": true },
+                { "name": "LegendOptions", "value": { "isEnabled": true, "position": "Bottom" }, "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": false, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 0, "y": 5, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "506f217d-6929-44cf-a763-d4a86615ac78", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "customMetrics\n| where name in (\"aitr.translate.input.chars\", \"aitr.tts.chars\", \"aitr.foundry.prompt.chars\", \"aitr.foundry.response.chars\")\n| summarize Chars = sum(valueSum) by bin(timestamp, 15m), name\n", "isOptional": true },
+                { "name": "ControlType", "value": "FrameControlChart", "isOptional": true },
+                { "name": "SpecificChart", "value": "Area", "isOptional": true },
+                { "name": "PartTitle", "value": "Character usage (billable proxy)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "Sum by service · 15-min buckets", "isOptional": true },
+                { "name": "Dimensions", "value": { "xAxis": { "name": "timestamp", "type": "datetime" }, "yAxis": [{ "name": "Chars", "type": "long" }], "splitBy": [{ "name": "name", "type": "string" }], "aggregation": "Sum" }, "isOptional": true },
+                { "name": "LegendOptions", "value": { "isEnabled": true, "position": "Bottom" }, "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": false, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 6, "y": 5, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "028eda9d-7653-4c67-947a-b8f04aa072b2", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "customMetrics\n| where timestamp > ago(24h)\n| summarize\n    TransChars = sumif(valueSum, name == \"aitr.translate.input.chars\"),\n    TtsChars   = sumif(valueSum, name == \"aitr.tts.chars\"),\n    GptPrompt  = sumif(valueSum, name == \"aitr.foundry.prompt.chars\"),\n    GptResp    = sumif(valueSum, name == \"aitr.foundry.response.chars\")\n| extend\n    Translator_USD = round(TransChars * 10.0 / 1e6, 4),\n    TTS_USD        = round(TtsChars   * 16.0 / 1e6, 4),\n    Foundry_USD    = round((GptPrompt + GptResp) / 3.5 * 5.0 / 1e6, 4)\n| extend Total_USD = Translator_USD + TTS_USD + Foundry_USD\n| project Translator_USD, TTS_USD, Foundry_USD, Total_USD\n", "isOptional": true },
+                { "name": "ControlType", "value": "AnalyticsGrid", "isOptional": true },
+                { "name": "PartTitle", "value": "Estimated cost (last 24h, USD)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "Translator $10/1M · TTS $16/1M · GPT ~$5/1M tok", "isOptional": true },
+                { "name": "Dimensions", "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": true, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 0, "y": 9, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "289f3662-b2bf-447a-8a82-77681d8b5fe9", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "requests\n| summarize Total = count(), Failed = countif(success == false) by bin(timestamp, 5m)\n| extend ErrorRatePct = iff(Total > 0, round(100.0 * Failed / Total, 2), 0.0)\n| project timestamp, Failed, ErrorRatePct\n", "isOptional": true },
+                { "name": "ControlType", "value": "FrameControlChart", "isOptional": true },
+                { "name": "SpecificChart", "value": "Line", "isOptional": true },
+                { "name": "PartTitle", "value": "HTTP error rate", "isOptional": true },
+                { "name": "PartSubTitle", "value": "All API requests · 5-min buckets", "isOptional": true },
+                { "name": "Dimensions", "value": { "xAxis": { "name": "timestamp", "type": "datetime" }, "yAxis": [{ "name": "ErrorRatePct", "type": "real" }, { "name": "Failed", "type": "long" }], "splitBy": [], "aggregation": "Sum" }, "isOptional": true },
+                { "name": "LegendOptions", "value": { "isEnabled": true, "position": "Bottom" }, "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": false, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 6, "y": 9, "colSpan": 6, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "986ae4ef-0cbc-4e6e-86d3-aff36418bcd2", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "exceptions\n| where timestamp > ago(24h)\n| summarize Count = count(), LastSeen = max(timestamp) by type, Problem = tostring(outerMessage)\n| top 15 by Count desc\n", "isOptional": true },
+                { "name": "ControlType", "value": "AnalyticsGrid", "isOptional": true },
+                { "name": "PartTitle", "value": "Top exceptions (24h)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "By type + message", "isOptional": true },
+                { "name": "Dimensions", "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": true, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          },
+
+          {
+            "position": { "x": 0, "y": 13, "colSpan": 12, "rowSpan": 4 },
+            "metadata": {
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "inputs": [
+                { "name": "resourceTypeMode", "value": "components", "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "PartId", "value": "9843da43-53c5-4346-a874-278ea068cef7", "isOptional": true },
+                { "name": "Version", "value": "2.0", "isOptional": true },
+                { "name": "TimeRange", "value": "P1D", "isOptional": true },
+                { "name": "DashboardId", "isOptional": true },
+                { "name": "DraftRequestParameters", "isOptional": true },
+                { "name": "Query", "value": "dependencies\n| where timestamp > ago(24h)\n| where name in (\"translate\", \"tts.synth\") or name startswith \"foundry.\"\n| summarize\n    Calls = count(),\n    Failed = countif(success == false),\n    p50 = percentile(duration, 50),\n    p95 = percentile(duration, 95),\n    p99 = percentile(duration, 99)\n  by Span = name\n| order by Calls desc\n", "isOptional": true },
+                { "name": "ControlType", "value": "AnalyticsGrid", "isOptional": true },
+                { "name": "PartTitle", "value": "Span summary (24h)", "isOptional": true },
+                { "name": "PartSubTitle", "value": "OTel dependencies · calls · failures · p50/95/99", "isOptional": true },
+                { "name": "Dimensions", "isOptional": true },
+                { "name": "IsQueryContainTimeRange", "value": true, "isOptional": true }
+              ],
+              "settings": {},
+              "asset": { "idInputName": "ComponentId", "type": "ApplicationInsights" }
+            }
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "model": {
+        "timeRange": {
+          "value": { "relative": { "duration": 24, "timeUnit": 1 } },
+          "type": "MsPortalFx.Composition.Configuration.ValueTypes.TimeRange"
+        },
+        "filterLocale": { "value": "en-us" },
+        "filters": {
+          "value": {
+            "MsPortalFx_TimeRange": {
+              "model": {
+                "format": "utc",
+                "granularity": "auto",
+                "relative": "24h"
+              },
+              "displayCache": { "name": "UTC Time", "value": "Past 24 hours" },
+              "filteredPartIds": []
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": { "hidden-title": "AI Translator — cost & health" },
+  "location": "swedencentral"
+}

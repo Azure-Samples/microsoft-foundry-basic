@@ -13,10 +13,10 @@ namespace chatui.Auth;
 /// when running under the Development environment with <c>DevAuth:Enabled=true</c>
 /// so that local runs and integration tests work without Easy Auth.
 ///
-/// In dev mode the client may additionally override the impersonated identity
-/// per request via <c>X-Dev-Oid</c>, <c>X-Dev-Name</c>, <c>X-Dev-Email</c>,
-/// <c>X-Dev-Lang</c> headers. This is only honoured when Easy Auth is not
-/// wired and <c>DevAuth:Enabled</c> is true — never in production.
+/// In dev mode the client must select the impersonated identity per request via
+/// <c>X-Dev-Oid</c>, <c>X-Dev-Name</c>, <c>X-Dev-Email</c>, and
+/// <c>X-Dev-Lang</c> headers. This is only honoured when <c>DevAuth:Enabled</c>
+/// is true and takes precedence over Easy Auth — never in production.
 /// </summary>
 public sealed class EasyAuthUserContext(
     IHttpContextAccessor httpContextAccessor,
@@ -52,7 +52,7 @@ public sealed class EasyAuthUserContext(
         "name",
     ];
 
-    public async Task<User> GetOrCreateCurrentAsync(CancellationToken cancellationToken = default)
+    public async Task<User> GetCurrentAsync(CancellationToken cancellationToken = default)
     {
         var principal = ResolvePrincipal();
 
@@ -65,25 +65,12 @@ public sealed class EasyAuthUserContext(
             return existing;
         }
 
-        var user = new User
-        {
-            EntraObjectId = principal.EntraObjectId,
-            DisplayName = principal.DisplayName,
-            Email = principal.Email,
-            PreferredLanguage = string.IsNullOrWhiteSpace(principal.PreferredLanguage)
-                ? "en"
-                : principal.PreferredLanguage!,
-        };
-
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        logger.LogInformation(
-            "Created user row for Entra oid {EntraObjectId} ({DisplayName})",
+        logger.LogWarning(
+            "Rejected unprovisioned user with Entra oid {EntraObjectId} ({DisplayName})",
             principal.EntraObjectId,
             principal.DisplayName);
 
-        return user;
+        throw new UserNotProvisionedException();
     }
 
     private ResolvedPrincipal ResolvePrincipal()
@@ -91,28 +78,32 @@ public sealed class EasyAuthUserContext(
         var http = httpContextAccessor.HttpContext
             ?? throw new InvalidOperationException("No HttpContext available on the current request.");
 
-        if (TryReadEasyAuthPrincipal(http, out var principal))
-        {
-            return principal;
-        }
-
-        if (environment.IsDevelopment() && devAuthOptions.Value is { Enabled: true } dev)
+        if (environment.IsDevelopment() && devAuthOptions.Value.Enabled)
         {
             // Optional per-request override for multi-user testing on the same
             // tenant. Only trusted inside the Development environment.
-            if (http.Request.Headers.TryGetValue(DevOidHeader, out var oid) && !string.IsNullOrWhiteSpace(oid))
+            // WebSocket handshakes can't carry custom headers from a browser,
+            // so also accept the same values from the query string.
+            var oid = http.Request.Headers.TryGetValue(DevOidHeader, out var oidHeader) && !string.IsNullOrWhiteSpace(oidHeader)
+                ? oidHeader.ToString()
+                : http.Request.Query[DevOidHeader].ToString();
+            if (!string.IsNullOrWhiteSpace(oid))
             {
-                var name = http.Request.Headers.TryGetValue(DevNameHeader, out var n) ? n.ToString() : oid.ToString();
-                var email = http.Request.Headers.TryGetValue(DevEmailHeader, out var e) ? e.ToString() : string.Empty;
-                var lang = http.Request.Headers.TryGetValue(DevLangHeader, out var l) ? l.ToString() : "en";
-                return new ResolvedPrincipal(oid.ToString(), name, email, lang);
+                string HeaderOrQuery(string key) => http.Request.Headers.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v)
+                    ? v.ToString()
+                    : http.Request.Query[key].ToString();
+                var name = string.IsNullOrWhiteSpace(HeaderOrQuery(DevNameHeader)) ? oid : HeaderOrQuery(DevNameHeader);
+                var email = HeaderOrQuery(DevEmailHeader);
+                var lang = string.IsNullOrWhiteSpace(HeaderOrQuery(DevLangHeader)) ? "en" : HeaderOrQuery(DevLangHeader);
+                return new ResolvedPrincipal(oid, name, email, lang);
             }
 
-            return new ResolvedPrincipal(
-                dev.EntraObjectId,
-                dev.DisplayName,
-                dev.Email,
-                dev.PreferredLanguage);
+            throw new DevPersonaRequiredException();
+        }
+
+        if (TryReadEasyAuthPrincipal(http, out var principal))
+        {
+            return principal;
         }
 
         throw new UnauthorizedAccessException(
@@ -200,3 +191,7 @@ public sealed class EasyAuthUserContext(
         return true;
     }
 }
+
+public sealed class DevPersonaRequiredException : UnauthorizedAccessException;
+
+public sealed class UserNotProvisionedException : UnauthorizedAccessException;

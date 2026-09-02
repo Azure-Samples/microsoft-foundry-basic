@@ -12,7 +12,7 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
     [HttpGet]
     public async Task<ActionResult<MeResponse>> Get(CancellationToken cancellationToken)
     {
-        var user = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var user = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
         return Ok(new MeResponse(user.Id, user.DisplayName, user.Email, user.PreferredLanguage));
     }
 
@@ -21,7 +21,7 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
         [FromBody] MePatchRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var user = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(request.PreferredLanguage))
         {

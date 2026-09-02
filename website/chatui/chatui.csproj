@@ -24,5 +24,7 @@
     <PackageReference Include="Azure.Messaging.WebPubSub" Version="1.5.0" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.14.0" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.43.0" />
   </ItemGroup>
 </Project>

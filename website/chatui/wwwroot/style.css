@@ -1,46 +1,50 @@
 :root {
   color-scheme: light;
-  --bg: #f7f4ef;
-  --bg-elev: #fcfbf8;
+  /* Modern Emerald palette — warm stone neutrals + emerald accent. Fresh,
+     AI-forward look; distinct from clinical enterprise blue. All colors
+     WCAG AA against their pair. */
+  --bg: #fafaf9;
+  --bg-elev: #ffffff;
   --surface: #ffffff;
-  --surface-soft: #f5f5f5;
-  --border: #dedede;
-  --border-strong: #919191;
-  --text: #242424;
-  --text-muted: #5c5c5c;
-  --text-soft: #6f6f6f;
-  --accent: #b11f4b;
-  --accent-hover: #9a1a41;
-  --accent-soft: rgba(177, 31, 75, 0.08);
+  --surface-soft: #f5f5f4;
+  --border: #e7e5e4;
+  --border-strong: #a8a29e;
+  --text: #1c1917;
+  --text-muted: #57534e;
+  --text-soft: #78716c;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-soft: rgba(5, 150, 105, 0.10);
   --accent-fg: #ffffff;
-  --success: #16a34a;
-  --danger: #dc2626;
-  --warning: #f59e0b;
-  --link: #0078d4;
-  --shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --success: #059669;
+  --danger: #b91c1c;
+  --warning: #d97706;
+  --link: #0369a1;
+  --shadow: 0 18px 48px rgba(28, 25, 23, 0.10);
   --panel: rgba(255, 255, 255, 0.86);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #3d3b3a;
-    --bg-elev: #343231;
-    --surface: #292929;
-    --surface-soft: #2e2e2e;
-    --border: #474747;
-    --border-strong: #5f5f5f;
-    --text: #dedede;
-    --text-muted: #b0b0b0;
-    --text-soft: #b0b0b0;
-    --accent: #fd8ea1;
-    --accent-hover: #fb7b91;
-    --accent-soft: rgba(253, 142, 161, 0.14);
-    --accent-fg: #1a1a1a;
-    --success: #4ade80;
+    --bg: #0c0a09;
+    --bg-elev: #1c1917;
+    --surface: #1c1917;
+    --surface-soft: #292524;
+    --border: #44403c;
+    --border-strong: #78716c;
+    --text: #fafaf9;
+    --text-muted: #a8a29e;
+    --text-soft: #a8a29e;
+    --accent: #34d399;
+    --accent-hover: #6ee7b7;
+    --accent-soft: rgba(52, 211, 153, 0.14);
+    --accent-fg: #052e1f;
+    --success: #34d399;
     --danger: #f87171;
     --warning: #fbbf24;
-    --panel: rgba(41, 41, 41, 0.86);
-    --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+    --link: #7dd3fc;
+    --panel: rgba(28, 25, 23, 0.86);
+    --shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
   }
 }
 
@@ -265,8 +269,55 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 .subtitles { min-height: 60vh; max-height: 70vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px; }
 .subtitle { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface-soft); }
+.subtitle.foreign { border-color: var(--accent); background: var(--accent-soft); }
 .subtitle.mine { border-color: var(--accent); background: var(--accent-soft); }
 .subtitle .who { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.subtitle .speaker-tag {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: baseline;
+  background: var(--speaker-color, var(--accent));
+}
+.subtitle.has-speaker { border-left: 4px solid var(--speaker-color, var(--accent)); padding-left: 10px; }
+.subtitle .lang-pill {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 8px; margin: 0 2px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit; cursor: pointer;
+  line-height: 1.4;
+}
+.subtitle .lang-pill:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.subtitle .lang-pill.uncertain { border-color: var(--warning); color: var(--warning); background: rgba(217, 119, 6, 0.08); }
+.subtitle .uncertain-mark { margin-left: 2px; font-weight: 700; }
+.subtitle.recomputing { opacity: 0.55; }
+
+.repick-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 180px; max-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 4px 0;
+  display: flex; flex-direction: column;
+}
+.repick-menu .repick-opt {
+  padding: 10px 14px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 0; font: inherit; cursor: pointer;
+  min-height: 44px;
+}
+.repick-menu .repick-opt:hover, .repick-menu .repick-opt:focus-visible {
+  background: var(--accent-soft); color: var(--accent);
+}
 .subtitle .translated { font-size: 16px; }
 .subtitle .original { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 

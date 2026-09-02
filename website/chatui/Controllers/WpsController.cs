@@ -18,7 +18,7 @@ public class WpsController(IUserContext userContext, WebPubSubBroadcaster broadc
     [HttpGet("inbox")]
     public async Task<ActionResult<InboxTokenResponse>> Inbox(CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var uri = broadcaster.GetInboxAccessUri(me.Id);
         return Ok(new InboxTokenResponse(uri.ToString(), DateTimeOffset.UtcNow.AddHours(1)));
     }

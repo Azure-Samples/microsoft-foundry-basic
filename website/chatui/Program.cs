@@ -2,11 +2,14 @@ using Microsoft.Extensions.Options;
 using Azure.AI.Projects;
 using Azure.Core;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using chatui.Auth;
 using chatui.Configuration;
 using chatui.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -115,15 +118,65 @@ builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();
+builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<chatui.Services.TranslatorService>();
 builder.Services.AddSingleton<chatui.Services.JoinTokenService>();
 builder.Services.AddSingleton<chatui.Services.QrCodeService>();
 builder.Services.AddSingleton<chatui.Services.WebPubSubBroadcaster>();
 builder.Services.AddSingleton<chatui.Services.FoundryAgentService>();
+builder.Services.AddSingleton<chatui.Services.TranslatorTelemetry>();
+
+// Azure Monitor OpenTelemetry Distro — the current Microsoft-recommended
+// path for new .NET apps. It wires up:
+//  * Auto-instrumentation for ASP.NET Core, HttpClient, SqlClient, and
+//    anything else with an OTel instrumentation package installed.
+//  * An Azure Monitor exporter that reads APPLICATIONINSIGHTS_CONNECTION_STRING
+//    from configuration and ships traces/metrics/logs to the workspace-based
+//    App Insights component.
+//  * Our custom ActivitySource + Meter (see TranslatorTelemetry) — spans
+//    show up as dependencies, metrics as Azure Monitor Metrics + customMetrics.
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(chatui.Services.TranslatorTelemetry.SourceName))
+    .WithMetrics(m => m.AddMeter(chatui.Services.TranslatorTelemetry.SourceName));
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (DevPersonaRequiredException)
+    {
+        await Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Demo persona required",
+            detail: "Specify a valid demo user in the URL.",
+            extensions: new Dictionary<string, object?> { ["code"] = "demo_persona_required" })
+            .ExecuteAsync(context);
+    }
+    catch (UserNotProvisionedException)
+    {
+        await Results.Problem(
+            statusCode: StatusCodes.Status403Forbidden,
+            title: "User is not provisioned",
+            detail: "The selected user does not exist in this demo.",
+            extensions: new Dictionary<string, object?> { ["code"] = "user_not_provisioned" })
+            .ExecuteAsync(context);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        await Results.Problem(
+            statusCode: StatusCodes.Status401Unauthorized,
+            title: "Authentication required",
+            extensions: new Dictionary<string, object?> { ["code"] = "authentication_required" })
+            .ExecuteAsync(context);
+    }
+});
 
 app.UseDefaultFiles();
 
@@ -134,7 +187,9 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = ctx =>
     {
         var path = ctx.File.Name;
-        if (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        if (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
         {
             ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
         }
@@ -142,6 +197,13 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+
+// Enable WebSocket support for the audio streaming endpoint
+// (/api/speech/transcribe → server-side ConversationTranscriber).
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30),
+});
 
 app.MapControllers();
 

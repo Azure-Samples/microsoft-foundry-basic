@@ -26,7 +26,7 @@ public class MeetingsController(
     [HttpGet("mine")]
     public async Task<ActionResult<IReadOnlyList<MeetingSummary>>> ListMine(CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
 
         var meetings = await dbContext.Meetings
             .AsNoTracking()
@@ -51,7 +51,7 @@ public class MeetingsController(
         [FromBody] CreateMeetingRequest request,
         CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var title = string.IsNullOrWhiteSpace(request.Title)
             ? $"On-site meeting — {DateTime.UtcNow:yyyy-MM-dd}"
             : request.Title!.Trim();
@@ -92,7 +92,7 @@ public class MeetingsController(
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<MeetingDetails>> Get(Guid id, CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await LoadMyMeetingAsync(id, me.Id, ct).ConfigureAwait(false);
         if (meeting is null)
         {
@@ -104,7 +104,7 @@ public class MeetingsController(
     [HttpPost("{id:guid}/end")]
     public async Task<IActionResult> End(Guid id, CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await dbContext.Meetings
             .FirstOrDefaultAsync(m => m.Id == id, ct)
             .ConfigureAwait(false);
@@ -157,7 +157,7 @@ public class MeetingsController(
             return Unauthorized(new { error = "Invalid or expired join token." });
         }
 
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await dbContext.Meetings
             .FirstOrDefaultAsync(m => m.Id == claims.MeetingId, ct)
             .ConfigureAwait(false);
@@ -217,7 +217,7 @@ public class MeetingsController(
     [HttpPost("{id:guid}/leave")]
     public async Task<IActionResult> Leave(Guid id, CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var participant = await dbContext.Participants
             .FirstOrDefaultAsync(p => p.MeetingId == id && p.UserId == me.Id, ct)
             .ConfigureAwait(false);
@@ -248,7 +248,7 @@ public class MeetingsController(
         [FromQuery] string? lang = null,
         CancellationToken ct = default)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await LoadMyMeetingAsync(id, me.Id, ct).ConfigureAwait(false);
         if (meeting is null)
         {
@@ -295,7 +295,7 @@ public class MeetingsController(
         [FromBody] PostTurnRequest request,
         CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await dbContext.Meetings
             .Include(m => m.Participants)
             .FirstOrDefaultAsync(m => m.Id == id, ct)

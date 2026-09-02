@@ -29,7 +29,7 @@ public class MessagesController(
         [FromQuery] int limit = 50,
         CancellationToken cancellationToken = default)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
         var conversation = await LoadMyConversationAsync(conversationId, me.Id, cancellationToken).ConfigureAwait(false);
         if (conversation is null)
         {
@@ -67,7 +67,7 @@ public class MessagesController(
         [FromBody] SendMessageRequest request,
         CancellationToken cancellationToken)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
         var conversation = await LoadMyConversationAsync(conversationId, me.Id, cancellationToken).ConfigureAwait(false);
         if (conversation is null)
         {

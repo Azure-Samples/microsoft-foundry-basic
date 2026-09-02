@@ -30,7 +30,7 @@ public class MeetingIntelligenceController(
         [FromBody] AddresseeHintRequest request,
         CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await LoadMyMeetingAsync(id, me.Id, ct).ConfigureAwait(false);
         if (meeting is null)
         {
@@ -65,7 +65,7 @@ public class MeetingIntelligenceController(
         [FromBody] SummaryRequest request,
         CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await LoadMyMeetingAsync(id, me.Id, ct).ConfigureAwait(false);
         if (meeting is null)
         {
@@ -133,7 +133,7 @@ public class MeetingIntelligenceController(
         [FromQuery] string? lang,
         CancellationToken ct)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(ct).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
         var meeting = await LoadMyMeetingAsync(id, me.Id, ct).ConfigureAwait(false);
         if (meeting is null)
         {

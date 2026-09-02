@@ -21,7 +21,7 @@ public class UsersController(IUserContext userContext, TranslatorDbContext dbCon
         [FromQuery] int limit = 25,
         CancellationToken cancellationToken = default)
     {
-        var me = await userContext.GetOrCreateCurrentAsync(cancellationToken).ConfigureAwait(false);
+        var me = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
 
         limit = Math.Clamp(limit, 1, 100);
         query = query?.Trim();

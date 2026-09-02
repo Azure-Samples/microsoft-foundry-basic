@@ -2,7 +2,7 @@ namespace chatui.Data.Entities;
 
 /// <summary>
 /// A person signed into the workload via App Service Easy Auth (Entra ID).
-/// Row is created on the first request the person makes to /api/me.
+/// The row must exist before the person can use the workload.
 /// </summary>
 public class User
 {
