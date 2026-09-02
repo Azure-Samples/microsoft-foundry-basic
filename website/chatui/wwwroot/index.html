@@ -27,7 +27,11 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="glyph">🌐</span><strong>AI Translator</strong></div>
-    <nav class="tabs" id="tabs" hidden></nav>
+    <nav class="tabs" id="tabs" aria-label="Main navigation" hidden>
+      <a href="#/talk" data-tab="talk">Talk</a>
+      <a href="#/chat" data-tab="chat">Chats</a>
+      <a href="#/meetings" data-tab="meetings">Meetings</a>
+    </nav>
     <div class="me" id="me" hidden>
       <a href="#" id="dev-badge" class="pill accent" hidden title="Test persona"></a>
       <span id="me-name"></span>

@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using chatui.Auth;
-using chatui.Data;
 using chatui.Data.Entities;
 using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace chatui.Controllers;
 
@@ -17,7 +15,7 @@ namespace chatui.Controllers;
 [Route("api/meetings")]
 public class MeetingsController(
     IUserContext userContext,
-    TranslatorDbContext dbContext,
+    TransientSessionStore sessions,
     JoinTokenService joinTokens,
     QrCodeService qrCodes,
     WebPubSubBroadcaster broadcaster,
@@ -28,11 +26,7 @@ public class MeetingsController(
     {
         var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
 
-        var meetings = await dbContext.Meetings
-            .AsNoTracking()
-            .Where(m => m.InitiatorId == me.Id
-                     || m.Participants.Any(p => p.UserId == me.Id))
-            .OrderByDescending(m => m.CreatedAt)
+        var meetings = sessions.ListMeetings(me.Id)
             .Select(m => new MeetingSummary(
                 m.Id,
                 m.Title,
@@ -40,8 +34,7 @@ public class MeetingsController(
                 m.InitiatorId == me.Id ? "initiator" : "listener",
                 m.CreatedAt,
                 m.EndedAt))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+            .ToList();
 
         return Ok(meetings);
     }
@@ -56,23 +49,7 @@ public class MeetingsController(
             ? $"On-site meeting — {DateTime.UtcNow:yyyy-MM-dd}"
             : request.Title!.Trim();
 
-        var meeting = new Meeting
-        {
-            InitiatorId = me.Id,
-            Title = title,
-            Status = "active",
-        };
-        dbContext.Meetings.Add(meeting);
-
-        dbContext.Participants.Add(new Participant
-        {
-            Meeting = meeting,
-            UserId = me.Id,
-            Language = me.PreferredLanguage,
-            Role = "initiator",
-        });
-
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        var meeting = sessions.CreateMeeting(me, title);
 
         var baseUri = $"{Request.Scheme}://{Request.Host}";
         var token = await joinTokens.IssueAsync(meeting.Id, baseUri, ct).ConfigureAwait(false);
@@ -105,9 +82,7 @@ public class MeetingsController(
     public async Task<IActionResult> End(Guid id, CancellationToken ct)
     {
         var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
-        var meeting = await dbContext.Meetings
-            .FirstOrDefaultAsync(m => m.Id == id, ct)
-            .ConfigureAwait(false);
+        var meeting = sessions.FindMeeting(id);
         if (meeting is null)
         {
             return NotFound();
@@ -123,7 +98,6 @@ public class MeetingsController(
 
         meeting.Status = "ended";
         meeting.EndedAt = DateTimeOffset.UtcNow;
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await broadcaster.PublishPresenceAsync(id, new
         {
@@ -158,9 +132,7 @@ public class MeetingsController(
         }
 
         var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
-        var meeting = await dbContext.Meetings
-            .FirstOrDefaultAsync(m => m.Id == claims.MeetingId, ct)
-            .ConfigureAwait(false);
+        var meeting = sessions.FindMeeting(claims.MeetingId);
         if (meeting is null)
         {
             return NotFound(new { error = "Meeting not found." });
@@ -170,26 +142,7 @@ public class MeetingsController(
             return StatusCode(StatusCodes.Status410Gone, new { error = "Meeting has ended." });
         }
 
-        var participant = await dbContext.Participants
-            .FirstOrDefaultAsync(p => p.MeetingId == claims.MeetingId && p.UserId == me.Id, ct)
-            .ConfigureAwait(false);
-        if (participant is null)
-        {
-            participant = new Participant
-            {
-                MeetingId = claims.MeetingId,
-                UserId = me.Id,
-                Language = request.Language,
-                Role = "listener",
-            };
-            dbContext.Participants.Add(participant);
-        }
-        else
-        {
-            participant.Language = request.Language;
-            participant.LeftAt = null;
-        }
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        sessions.JoinMeeting(meeting, me, request.Language);
 
         var loaded = await LoadMyMeetingAsync(claims.MeetingId, me.Id, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Meeting disappeared mid-join.");
@@ -218,16 +171,13 @@ public class MeetingsController(
     public async Task<IActionResult> Leave(Guid id, CancellationToken ct)
     {
         var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
-        var participant = await dbContext.Participants
-            .FirstOrDefaultAsync(p => p.MeetingId == id && p.UserId == me.Id, ct)
-            .ConfigureAwait(false);
-        if (participant is null)
+        var meeting = sessions.GetMeeting(id, me.Id);
+        if (meeting is null)
         {
             return NoContent();
         }
 
-        participant.LeftAt = DateTimeOffset.UtcNow;
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        sessions.LeaveMeeting(id, me.Id);
 
         await broadcaster.PublishPresenceAsync(id, new
         {
@@ -258,20 +208,7 @@ public class MeetingsController(
         var callerLanguage = lang ?? meeting.Participants.First(p => p.UserId == me.Id).Language;
         limit = Math.Clamp(limit, 1, 500);
 
-        var q = dbContext.Turns
-            .AsNoTracking()
-            .Include(t => t.Translations.Where(tt => tt.TargetLang == callerLanguage))
-            .Where(t => t.MeetingId == id);
-        if (before is not null)
-        {
-            q = q.Where(t => t.CreatedAt < before);
-        }
-
-        var turns = await q
-            .OrderByDescending(t => t.CreatedAt)
-            .Take(limit)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        var turns = sessions.ListTurns(id, before, limit);
 
         var response = turns
             .OrderBy(t => t.CreatedAt)
@@ -282,7 +219,7 @@ public class MeetingsController(
                 t.SourceLang,
                 callerLanguage,
                 t.Original,
-                t.Translations.FirstOrDefault()?.Translated,
+                t.Translations.FirstOrDefault(tt => tt.TargetLang == callerLanguage)?.Translated,
                 t.CreatedAt))
             .ToList();
 
@@ -296,10 +233,7 @@ public class MeetingsController(
         CancellationToken ct)
     {
         var me = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
-        var meeting = await dbContext.Meetings
-            .Include(m => m.Participants)
-            .FirstOrDefaultAsync(m => m.Id == id, ct)
-            .ConfigureAwait(false);
+        var meeting = sessions.FindMeeting(id);
         if (meeting is null)
         {
             return NotFound();
@@ -316,22 +250,14 @@ public class MeetingsController(
         var turn = new Turn
         {
             MeetingId = id,
+            Meeting = meeting,
             SpeakerId = me.Id,
+            Speaker = me,
             AddresseeId = request.AddresseeId,
             SourceLang = request.SourceLang,
             Original = request.Original,
         };
-        dbContext.Turns.Add(turn);
-        foreach (var (lang, text) in request.Translations)
-        {
-            dbContext.TurnTranslations.Add(new TurnTranslation
-            {
-                Turn = turn,
-                TargetLang = lang,
-                Translated = text,
-            });
-        }
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        sessions.AddTurn(turn, request.Translations);
 
         var speakerName = me.DisplayName;
         foreach (var (targetLang, translated) in request.Translations)
@@ -381,12 +307,7 @@ public class MeetingsController(
     }
 
     private Task<Meeting?> LoadMyMeetingAsync(Guid meetingId, Guid meId, CancellationToken ct) =>
-        dbContext.Meetings
-            .AsNoTracking()
-            .Include(m => m.Initiator)
-            .Include(m => m.Participants).ThenInclude(p => p.User)
-            .FirstOrDefaultAsync(m => m.Id == meetingId
-                && (m.InitiatorId == meId || m.Participants.Any(p => p.UserId == meId)), ct);
+        Task.FromResult(sessions.GetMeeting(meetingId, meId));
 
     private static MeetingDetails ToDetails(Meeting meeting) => new(
         meeting.Id,

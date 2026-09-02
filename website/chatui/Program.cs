@@ -125,6 +125,7 @@ builder.Services.AddSingleton<chatui.Services.QrCodeService>();
 builder.Services.AddSingleton<chatui.Services.WebPubSubBroadcaster>();
 builder.Services.AddSingleton<chatui.Services.FoundryAgentService>();
 builder.Services.AddSingleton<chatui.Services.TranslatorTelemetry>();
+builder.Services.AddSingleton<chatui.Services.TransientSessionStore>();
 
 // Azure Monitor OpenTelemetry Distro — the current Microsoft-recommended
 // path for new .NET apps. It wires up:

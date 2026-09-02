@@ -17,7 +17,7 @@ namespace chatui.Controllers;
 [Route("api/conversations/{conversationId:guid}/messages")]
 public class MessagesController(
     IUserContext userContext,
-    TranslatorDbContext dbContext,
+    TransientSessionStore sessions,
     TranslatorService translator,
     WebPubSubBroadcaster broadcaster,
     ILogger<MessagesController> logger) : ControllerBase
@@ -38,23 +38,7 @@ public class MessagesController(
 
         limit = Math.Clamp(limit, 1, 200);
 
-        var q = dbContext.Messages
-            .AsNoTracking()
-            .Where(m => m.ConversationId == conversationId);
-
-        if (before is not null)
-        {
-            q = q.Where(m => m.CreatedAt < before);
-        }
-
-        var messages = await q
-            .OrderByDescending(m => m.CreatedAt)
-            .Take(limit)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var response = messages
-            .OrderBy(m => m.CreatedAt)
+        var response = sessions.ListMessages(conversationId, before, limit)
             .Select(ToResponse)
             .ToList();
 
@@ -94,8 +78,7 @@ public class MessagesController(
             Original = request.Text,
             Translated = result.TranslatedText,
         };
-        dbContext.Messages.Add(message);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        sessions.AddMessage(message);
 
         var response = ToResponse(message);
 
@@ -122,10 +105,7 @@ public class MessagesController(
     }
 
     private Task<Conversation?> LoadMyConversationAsync(Guid conversationId, Guid meId, CancellationToken ct) =>
-        dbContext.Conversations
-            .Include(c => c.UserA)
-            .Include(c => c.UserB)
-            .FirstOrDefaultAsync(c => c.Id == conversationId && (c.UserAId == meId || c.UserBId == meId), ct);
+        Task.FromResult(sessions.GetConversation(conversationId, meId));
 
     private static MessageResponse ToResponse(Message m) => new(
         m.Id,

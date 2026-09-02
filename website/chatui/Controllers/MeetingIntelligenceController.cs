@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using chatui.Auth;
-using chatui.Data;
 using chatui.Data.Entities;
 using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace chatui.Controllers;
 
@@ -20,7 +18,7 @@ namespace chatui.Controllers;
 [Route("api/meetings/{id:guid}")]
 public class MeetingIntelligenceController(
     IUserContext userContext,
-    TranslatorDbContext dbContext,
+    TransientSessionStore sessions,
     FoundryAgentService agent,
     WebPubSubBroadcaster broadcaster) : ControllerBase
 {
@@ -41,13 +39,11 @@ public class MeetingIntelligenceController(
             .Select(p => new FoundryAgentService.ParticipantView(p.User.Id, p.User.DisplayName, p.Language))
             .ToList();
 
-        var turns = await dbContext.Turns
-            .AsNoTracking()
-            .Where(t => t.MeetingId == id && request.RecentTurnIds.Contains(t.Id))
+        var turns = sessions.ListTurns(id, before: null, limit: 500)
+            .Where(t => request.RecentTurnIds.Contains(t.Id))
             .OrderBy(t => t.CreatedAt)
             .Select(t => new FoundryAgentService.TurnView(t.SpeakerId, t.Original, t.SourceLang, t.CreatedAt))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+            .ToList();
 
         var hint = await agent.InferAddresseeAsync(
             new FoundryAgentService.AddresseeContext(participants, turns), ct).ConfigureAwait(false);
@@ -74,13 +70,10 @@ public class MeetingIntelligenceController(
 
         var language = string.IsNullOrWhiteSpace(request.Language) ? me.PreferredLanguage : request.Language!;
 
-        var turns = await dbContext.Turns
-            .AsNoTracking()
-            .Where(t => t.MeetingId == id)
+        var turns = sessions.ListTurns(id, before: null, limit: 500)
             .OrderBy(t => t.CreatedAt)
             .Select(t => new FoundryAgentService.TurnView(t.SpeakerId, t.Original, t.SourceLang, t.CreatedAt))
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+            .ToList();
 
         var summary = await agent.SummariseAsync(
             new FoundryAgentService.SummariseContext(language, turns), ct).ConfigureAwait(false);
@@ -90,24 +83,7 @@ public class MeetingIntelligenceController(
             return StatusCode(StatusCodes.Status502BadGateway, new { error = "Agent did not return a summary." });
         }
 
-        var existing = await dbContext.MeetingSummaries
-            .FirstOrDefaultAsync(s => s.MeetingId == id && s.Language == language, ct)
-            .ConfigureAwait(false);
-        if (existing is null)
-        {
-            dbContext.MeetingSummaries.Add(new MeetingSummary
-            {
-                MeetingId = id,
-                Language = language,
-                Summary = summary!,
-            });
-        }
-        else
-        {
-            existing.Summary = summary!;
-            existing.GeneratedAt = DateTimeOffset.UtcNow;
-        }
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        var storedSummary = sessions.UpsertSummary(id, language, summary!);
 
         try
         {
@@ -124,7 +100,7 @@ public class MeetingIntelligenceController(
             // Best-effort; summary is persisted.
         }
 
-        return Ok(new MeetingSummaryResponse(summary!, language, DateTimeOffset.UtcNow));
+        return Ok(new MeetingSummaryResponse(summary!, language, storedSummary.GeneratedAt));
     }
 
     [HttpGet("summary")]
@@ -141,10 +117,7 @@ public class MeetingIntelligenceController(
         }
 
         var language = string.IsNullOrWhiteSpace(lang) ? me.PreferredLanguage : lang!;
-        var cached = await dbContext.MeetingSummaries
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.MeetingId == id && s.Language == language, ct)
-            .ConfigureAwait(false);
+        var cached = sessions.GetSummary(id, language);
         if (cached is null)
         {
             return NotFound(new { error = "No cached summary for that language." });
@@ -153,11 +126,7 @@ public class MeetingIntelligenceController(
     }
 
     private Task<Meeting?> LoadMyMeetingAsync(Guid meetingId, Guid meId, CancellationToken ct) =>
-        dbContext.Meetings
-            .AsNoTracking()
-            .Include(m => m.Participants).ThenInclude(p => p.User)
-            .FirstOrDefaultAsync(m => m.Id == meetingId
-                && (m.InitiatorId == meId || m.Participants.Any(p => p.UserId == meId)), ct);
+        Task.FromResult(sessions.GetMeeting(meetingId, meId));
 
     public sealed record AddresseeHintRequest([Required] List<Guid> RecentTurnIds);
 
