@@ -13,7 +13,7 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
     public async Task<ActionResult<MeResponse>> Get(CancellationToken cancellationToken)
     {
         var user = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
-        return Ok(new MeResponse(user.Id, user.DisplayName, user.Email, user.PreferredLanguage));
+        return Ok(ToResponse(user));
     }
 
     [HttpPatch]
@@ -30,10 +30,22 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        return Ok(new MeResponse(user.Id, user.DisplayName, user.Email, user.PreferredLanguage));
+        return Ok(ToResponse(user));
     }
 
-    public sealed record MeResponse(Guid Id, string DisplayName, string Email, string PreferredLanguage);
+    private static MeResponse ToResponse(Data.Entities.User user) => new(
+        user.Id,
+        user.DisplayName,
+        user.Email,
+        user.PreferredLanguage,
+        TrainingAccess.IsMember(user));
+
+    public sealed record MeResponse(
+        Guid Id,
+        string DisplayName,
+        string Email,
+        string PreferredLanguage,
+        bool CanUseTraining);
 
     public sealed record MePatchRequest([StringLength(16, MinimumLength = 2)] string? PreferredLanguage);
 }

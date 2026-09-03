@@ -75,6 +75,23 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
       versionUpgradeOption: 'NoAutoUpgrade' // Production deployments should not auto-upgrade models.  Testing compatibility is important.
     }
   }
+
+  @description('Realtime speech model used by the restricted English Training mode.')
+  resource trainingModel 'deployments' = {
+    name: 'gpt-realtime-2.1'
+    sku: {
+      capacity: 1
+      name: 'GlobalStandard'
+    }
+    properties: {
+      model: {
+        format: 'OpenAI'
+        name: 'gpt-realtime-2.1'
+        version: '2026-07-07'
+      }
+      versionUpgradeOption: 'NoAutoUpgrade'
+    }
+  }
 }
 
 // Role assignments

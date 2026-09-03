@@ -129,6 +129,26 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 @keyframes pulse { 0%,100% { box-shadow: 0 4px 14px rgba(220,38,38,0.35); } 50% { box-shadow: 0 4px 22px rgba(220,38,38,0.6); } }
 
 .talk-hint { margin: 10px 2px 14px; text-align: center; min-height: 20px; }
+.training-results { margin-top: 16px; }
+.training-turn { display: flex; flex-direction: column; gap: 6px; }
+.training-message {
+  width: fit-content;
+  max-width: min(78%, 720px);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.training-message-user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.training-message-coach {
+  align-self: flex-start;
+  background: var(--surface);
+}
 
 /* Toolbar with big tap targets — Languages, Speak translations, Clear */
 .talk-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }

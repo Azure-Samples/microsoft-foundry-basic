@@ -227,11 +227,8 @@ const state = {
 const routes = [];
 const addRoute = (regex, handler) => routes.push({ regex, handler });
 
-addRoute(/^\/join\/(.+)$/, (m) => showJoin(decodeURIComponent(m[1])));
 addRoute(/^#\/talk$/, () => showTalk());
-addRoute(/^#\/chat(?:\/([0-9a-f-]+))?$/i, (m) => showChats(m[1] || null));
-addRoute(/^#\/meetings$/, () => showMeetings());
-addRoute(/^#\/meetings\/([0-9a-f-]+)$/i, (m) => showMeetingRoom(m[1]));
+addRoute(/^#\/training$/, () => showTraining());
 addRoute(/^#?\/?$/, () => showTalk());
 
 const currentPath = () => window.location.hash || window.location.pathname;
@@ -241,20 +238,19 @@ async function route() {
     const m = path.match(r.regex);
     if (m) { try { await r.handler(m); } catch (e) { handleError(e); } return; }
   }
-  showMeetings();
+  location.hash = '#/talk';
 }
 window.addEventListener('hashchange', route);
 window.addEventListener('popstate', route);
 
 // -------- Screens --------
-const screens = ['loading', 'signin', 'access-denied', 'talk', 'chats', 'meetings', 'meeting-room', 'join'];
+const screens = ['loading', 'signin', 'access-denied', 'talk', 'training', 'chats', 'meetings', 'meeting-room', 'join'];
 function show(name) {
   screens.forEach(s => document.getElementById('screen-' + s).hidden = s !== name);
   document.querySelectorAll('#tabs a').forEach(a => {
     a.classList.toggle('active',
       (name === 'talk' && a.dataset.tab === 'talk') ||
-      (name === 'chats' && a.dataset.tab === 'chat') ||
-      (name.startsWith('meeting') && a.dataset.tab === 'meetings'));
+      (name === 'training' && a.dataset.tab === 'training'));
   });
 }
 
@@ -971,9 +967,179 @@ async function resumeTalkAudioContexts(sessionId) {
 }
 
 async function showTalk() {
+  await stopTraining();
   show('talk');
   syncTalkControls();
 }
+
+// -------- English training --------
+let trainingWs = null;
+let trainingStream = null;
+let trainingCaptureContext = null;
+let trainingPlaybackContext = null;
+let trainingWorklet = null;
+let trainingPlaybackAt = 0;
+let trainingCurrent = null;
+
+async function showTraining() {
+  if (!state.me?.canUseTraining) {
+    location.hash = '#/talk';
+    return;
+  }
+  if (talkActive || talkStarting) await stopTalk();
+  show('training');
+}
+
+async function startTraining() {
+  const button = document.getElementById('training-mic');
+  const status = document.getElementById('training-status');
+  const hint = document.getElementById('training-hint');
+  const micId = loadMeetingPrefs().micDeviceId;
+  trainingStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      ...(micId ? { deviceId: { exact: micId } } : {}),
+    },
+  });
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  trainingCaptureContext = new AudioContextClass();
+  trainingPlaybackContext = new AudioContextClass({ sampleRate: 24000 });
+  await trainingCaptureContext.audioWorklet.addModule('/pcm-processor.js?v=2');
+  const source = trainingCaptureContext.createMediaStreamSource(trainingStream);
+  trainingWorklet = new AudioWorkletNode(trainingCaptureContext, 'pcm-processor');
+  trainingWorklet.port.postMessage({ targetRate: 24000 });
+  source.connect(trainingWorklet);
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const query = new URLSearchParams();
+  const dev = currentDevPersona();
+  if (dev) {
+    query.set('X-Dev-Oid', dev.oid);
+    query.set('X-Dev-Name', dev.name);
+    query.set('X-Dev-Email', dev.email);
+    query.set('X-Dev-Lang', dev.lang);
+  }
+  trainingWs = new WebSocket(`${protocol}//${location.host}/api/training/live?${query}`);
+  trainingWs.binaryType = 'arraybuffer';
+  const pending = [];
+  trainingWorklet.port.onmessage = (event) => {
+    if (trainingWs?.readyState === WebSocket.OPEN) trainingWs.send(event.data);
+    else if (pending.length < 200) pending.push(event.data);
+  };
+  trainingWs.onopen = () => {
+    button.classList.add('recording');
+    button.querySelector('.mic-label').textContent = 'Stop training';
+    status.textContent = 'Listening';
+    hint.textContent = 'Listening… speak in any language.';
+    while (pending.length) trainingWs.send(pending.shift());
+  };
+  trainingWs.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer) {
+      playTrainingAudio(event.data);
+      return;
+    }
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    handleTrainingMessage(message);
+  };
+  trainingWs.onerror = () => { hint.textContent = 'Training connection failed.'; };
+  trainingWs.onclose = () => { if (trainingWs) void stopTraining(); };
+}
+
+function handleTrainingMessage(message) {
+  const results = document.getElementById('training-results');
+  const hint = document.getElementById('training-hint');
+  if (message.type === 'turn_started') {
+    if (results.querySelector('.muted')) results.innerHTML = '';
+    trainingCurrent = document.createElement('div');
+    trainingCurrent.className = 'training-turn';
+    trainingCurrent.dataset.original = '';
+    trainingCurrent.dataset.correction = '';
+    results.appendChild(trainingCurrent);
+    renderTrainingTurn();
+  } else if (message.type === 'original_delta' || message.type === 'original_done') {
+    ensureTrainingTurn();
+    trainingCurrent.dataset.original = message.type.endsWith('done')
+      ? message.text || trainingCurrent.dataset.original
+      : trainingCurrent.dataset.original + (message.text || '');
+    hint.textContent = `You: ${trainingCurrent.dataset.original.slice(-80)}`;
+    renderTrainingTurn();
+  } else if (message.type === 'correction_delta' || message.type === 'correction_done') {
+    ensureTrainingTurn();
+    trainingCurrent.dataset.correction = message.type.endsWith('done')
+      ? message.text || trainingCurrent.dataset.correction
+      : trainingCurrent.dataset.correction + (message.text || '');
+    renderTrainingTurn();
+    results.scrollTop = results.scrollHeight;
+  } else if (message.type === 'error') {
+    toast(message.message || 'Training model error', 'error');
+  }
+}
+
+function ensureTrainingTurn() {
+  if (!trainingCurrent) handleTrainingMessage({ type: 'turn_started' });
+}
+
+function renderTrainingTurn() {
+  if (!trainingCurrent) return;
+  const original = trainingCurrent.dataset.original || '';
+  const correction = trainingCurrent.dataset.correction || '';
+  trainingCurrent.innerHTML = `<div class="training-message training-message-user">${escapeHtml(original || '…')}</div>`
+    + `<div class="training-message training-message-coach">${escapeHtml(correction || '…')}</div>`;
+}
+
+function playTrainingAudio(arrayBuffer) {
+  if (!trainingPlaybackContext) return;
+  const input = new Int16Array(arrayBuffer);
+  const buffer = trainingPlaybackContext.createBuffer(1, input.length, 24000);
+  const output = buffer.getChannelData(0);
+  for (let index = 0; index < input.length; index++) output[index] = input[index] / 0x8000;
+  const source = trainingPlaybackContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(trainingPlaybackContext.destination);
+  const startAt = Math.max(trainingPlaybackContext.currentTime, trainingPlaybackAt);
+  source.start(startAt);
+  trainingPlaybackAt = startAt + buffer.duration;
+}
+
+async function stopTraining() {
+  const socket = trainingWs;
+  trainingWs = null;
+  if (socket) {
+    socket.onclose = null;
+    try { socket.close(1000, 'stop'); } catch {}
+  }
+  if (trainingWorklet) {
+    trainingWorklet.port.onmessage = null;
+    try { trainingWorklet.disconnect(); } catch {}
+    trainingWorklet = null;
+  }
+  trainingStream?.getTracks().forEach(track => track.stop());
+  trainingStream = null;
+  try { await trainingCaptureContext?.close(); } catch {}
+  try { await trainingPlaybackContext?.close(); } catch {}
+  trainingCaptureContext = null;
+  trainingPlaybackContext = null;
+  trainingPlaybackAt = 0;
+  trainingCurrent = null;
+  const button = document.getElementById('training-mic');
+  button.classList.remove('recording');
+  button.querySelector('.mic-label').textContent = 'Start training';
+  document.getElementById('training-status').textContent = 'Idle';
+  document.getElementById('training-hint').textContent = 'Press Start training and grant microphone access.';
+}
+
+document.getElementById('training-mic').addEventListener('click', async () => {
+  try { if (trainingWs) await stopTraining(); else await startTraining(); }
+  catch (error) { await stopTraining(); handleError(error); }
+});
+document.getElementById('training-clear').addEventListener('click', () => {
+  document.getElementById('training-results').innerHTML = '<div class="muted center">Nothing yet.</div>';
+  trainingCurrent = null;
+});
 
 function syncTalkControls() {
   const prefs = loadMeetingPrefs();
@@ -2142,6 +2308,7 @@ async function stopTalk({ interrupted = false } = {}) {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
+    if (trainingWs) void stopTraining();
     if (talkActive || talkStarting) {
       talkRestartOnVisible = true;
       talkVisibilityStopPromise = stopTalk({ interrupted: true });
@@ -2252,9 +2419,9 @@ async function boot() {
     show('signin'); return;
   }
   updateMeUi();
+  document.querySelector('[data-tab="training"]').hidden = !state.me.canUseTraining;
   document.getElementById('tabs').hidden = false;
   document.getElementById('me').hidden = false;
-  connectInbox(); // fire-and-forget; live push works when it connects.
   await route();
 }
 boot();

@@ -20,17 +20,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="AI Translator" />
 
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=51" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=48" defer></script>
+  <script type="module" src="/app.js?v=51" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="glyph">🌐</span><strong>AI Translator</strong></div>
     <nav class="tabs" id="tabs" aria-label="Main navigation" hidden>
       <a href="#/talk" data-tab="talk">Talk</a>
-      <a href="#/chat" data-tab="chat">Chats</a>
-      <a href="#/meetings" data-tab="meetings">Meetings</a>
+      <a href="#/training" data-tab="training" hidden>Training</a>
     </nav>
     <div class="me" id="me" hidden>
       <a href="#" id="dev-badge" class="pill accent" hidden title="Test persona"></a>
@@ -113,6 +112,27 @@
       </div>
 
       <div class="subtitles" id="talk-timeline"><div class="muted center">Nothing yet.</div></div>
+    </section>
+
+    <section class="screen" id="screen-training" hidden>
+      <div class="row-between">
+        <h2>English training</h2>
+        <span class="pill" id="training-status">Idle</span>
+      </div>
+      <p class="muted small">Speak in any language. The coach translates it into natural English, or polishes your English when needed, while preserving your style.</p>
+      <button class="mic-big" id="training-mic">
+        <span class="mic-icon">🎙️</span>
+        <span class="mic-label">Start training</span>
+      </button>
+      <div class="talk-hint muted small" id="training-hint">Press <strong>Start training</strong> and grant microphone access.</div>
+      <button class="tool-row" type="button" id="training-clear">
+        <span class="tool-icon">🧹</span>
+        <span class="tool-body">
+          <span class="tool-title">Clear session</span>
+          <span class="tool-desc">Remove all examples from this screen</span>
+        </span>
+      </button>
+      <div class="subtitles training-results" id="training-results"><div class="muted center">Nothing yet.</div></div>
     </section>
 
     <section class="screen" id="screen-chats" hidden>
