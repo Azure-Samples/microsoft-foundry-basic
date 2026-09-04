@@ -39,7 +39,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
   name: existingWebApplicationInsightsResourceName
 }
 
-resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
+resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
