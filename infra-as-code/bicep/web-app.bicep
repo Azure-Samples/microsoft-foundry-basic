@@ -100,7 +100,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
 }
 
 @description('This is the web app that contains the chat UI application.')
-resource webApp 'Microsoft.Web/sites@2024-11-01' = {
+resource webApp 'Microsoft.Web/sites@2025-03-01' = {
   name: appName
   location: location
   kind: 'app,linux'
