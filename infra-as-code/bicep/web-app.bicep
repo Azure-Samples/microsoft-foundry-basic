@@ -84,7 +84,7 @@ resource azureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
 }
 
 @description('Linux, B1 App Service Plan to host the chat web application.')
-resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: 'asp-${appName}${uniqueString(subscription().subscriptionId)}'
   location: location
   kind: 'linux'
