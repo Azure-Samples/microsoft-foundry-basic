@@ -44,7 +44,7 @@ resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' exis
 }
 
 @description('Built-in Role: [Azure AI User](https://learn.microsoft.com/azure/ai-foundry/concepts/rbac-azure-ai-foundry?pivots=fdp-project#azure-ai-user)')
-resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-05-01-preview' existing = {
   name: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
   scope: subscription()
 }
