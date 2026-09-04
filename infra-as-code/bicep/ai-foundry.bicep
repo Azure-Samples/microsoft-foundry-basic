@@ -36,7 +36,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
 // ---- New resources ----
 
 @description('Deploy foundry (account) with Foundry Agent Service capability.')
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2026-05-15-preview' = {
   name: foundryName
   location: location
   kind: 'AIServices'

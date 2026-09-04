@@ -50,7 +50,7 @@ resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-05-01-pre
 }
 
 @description('Existing Foundry account. This account is where the agents hosted in Foundry Agent Service will be deployed. The web app code calls to these agents.')
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2026-05-15-preview' existing = {
   name: existingFoundryResourceName
 
   resource project 'projects' existing = {
