@@ -30,7 +30,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 // ---- New resources ----
 
 @description('Existing Microsoft Foundry account. The project will be created as a child resource of this account.')
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2026-05-15-preview' existing  = {
   name: existingFoundryName
 
   resource project 'projects' = {

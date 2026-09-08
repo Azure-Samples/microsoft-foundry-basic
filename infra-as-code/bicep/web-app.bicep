@@ -39,18 +39,18 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
   name: existingWebApplicationInsightsResourceName
 }
 
-resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
+resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
 @description('Built-in Role: [Azure AI User](https://learn.microsoft.com/azure/ai-foundry/concepts/rbac-azure-ai-foundry?pivots=fdp-project#azure-ai-user)')
-resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-05-01-preview' existing = {
   name: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
   scope: subscription()
 }
 
 @description('Existing Foundry account. This account is where the agents hosted in Foundry Agent Service will be deployed. The web app code calls to these agents.')
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2026-05-15-preview' existing = {
   name: existingFoundryResourceName
 
   resource project 'projects' existing = {
@@ -61,9 +61,15 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
 // ---- New resources ----
 
 @description('Managed Identity for App Service')
-resource appServiceManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+resource appServiceManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2025-05-31-preview' = {
   name: 'id-${appName}'
   location: location
+  properties: {
+    isolationScope: 'Regional'
+    assignmentRestrictions: {
+      providers: ['Microsoft.Web/sites']
+    }
+  }
 }
 
 @description('Grant the App Service managed identity Azure AI user role permission so it can call into the Foundry-hosted agent.')
@@ -78,7 +84,7 @@ resource azureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
 }
 
 @description('Linux, B1 App Service Plan to host the chat web application.')
-resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: 'asp-${appName}${uniqueString(subscription().subscriptionId)}'
   location: location
   kind: 'linux'
@@ -94,7 +100,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2024-11-01' = {
 }
 
 @description('This is the web app that contains the chat UI application.')
-resource webApp 'Microsoft.Web/sites@2024-11-01' = {
+resource webApp 'Microsoft.Web/sites@2025-03-01' = {
   name: appName
   location: location
   kind: 'app,linux'

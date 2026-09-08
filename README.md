@@ -138,17 +138,23 @@ To test this scenario, you'll be deploying a prompt-based AI agent. The agent us
 
    The first time you access this section, the **Agents** list should be empty.
 
-1. Click **Create agent** button.
+1. Click the **New Agent** dropdown button and select **Build an agent**.
 
-1. From the Create an agent popup, enter 'baseline-chatbot-agent' as the Agent name.
+1. Enter 'baseline-chatbot-agent' as the Agent name.
 
-1. From the Playground panel, select the available deployment model named **agent-model**.
+1. Click **Create and open playground** button.
 
-1. Expand the Knowledge section, and click **Add** button.
+1. In the Playground panel, select the available deployment model named **agent-model**.
 
-1. From the drop down list select the option **+ Set up a data source via tools**.
+1. Expand the Tools section.
 
-1. From the popup window select the knowledge type 'Grounding with Bing Search'.
+1. On the **Web search**, click the vertical three-dot menu (**⋮**) or options icon, then click **Remove**.
+
+1. Then click **Add** button.
+
+1. From the drop down list select the option **Add tools**.
+
+1. From the popup window select the tool type 'Grounding with Bing Search'.
 
 1. Click **Add tool**.
 
