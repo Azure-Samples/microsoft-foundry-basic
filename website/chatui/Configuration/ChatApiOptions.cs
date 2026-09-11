@@ -4,6 +4,9 @@ namespace chatui.Configuration;
 
 public class ChatApiOptions
 {
+    public bool TrainingGuidedEnabled { get; init; }
+    public string[] TrainingMemberObjectIds { get; init; } = [];
+
     [Url]
     public string AIProjectEndpoint { get; init; } = default!;
 

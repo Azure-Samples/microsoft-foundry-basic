@@ -6,7 +6,7 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('Assign your user some roles to support fluid access when working in the Foundry portal and its dependencies.')
@@ -23,6 +23,8 @@ param entraAppClientId string = ''
 
 @description('Optional: allowed audience for Easy Auth tokens. Defaults to api://<entraAppClientId>.')
 param entraAppAllowedAudience string = ''
+param aiAgentName string = 'translator-agent'
+param aiAgentVersion string = '1'
 
 @description('Set to true to opt-out of deployment telemetry.')
 param telemetryOptOut bool = false
@@ -36,7 +38,7 @@ var appName = 'app-${baseName}'
 
 @description('This is the log sink for all Azure Diagnostics in the workload.')
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
-  name: 'log-workload'
+  name: contains(baseName, '-') ? 'log-${baseName}' : 'log-workload'
   location: location
   properties: {
     sku: {
@@ -47,14 +49,14 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
     workspaceCapping: {
       dailyQuotaGb: 10 // Production readiness change: In production, tune this value to ensure operational logs are collected, but a reasonable cap is set.
     }
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
+    publicNetworkAccessForIngestion: 'Disabled'
+    publicNetworkAccessForQuery: 'Disabled'
   }
 }
 
 @description('User-assigned managed identity for the App Service. Created here (not inside web-app.bicep) so data-plane resources (Postgres, Key Vault, Web PubSub) can grant it roles before the web app itself is deployed. This breaks the otherwise-circular dependency where web-app needs Postgres FQDN in appsettings and Postgres needs the MI principal ID as an Entra admin.')
 resource appServiceManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: 'id-${appName}'
+  name: contains(baseName, '-') ? 'id-${baseName}' : 'id-${appName}'
   location: location
 }
 
@@ -72,12 +74,6 @@ module deployFoundry 'ai-foundry.bicep' = {
   }
 }
 
-@description('Deploy the Bing account for Internet grounding data to be used by agents in the Foundry Agent Service.')
-module deployBingAccount 'bing-grounding.bicep' = {
-  scope: resourceGroup()
-  name: 'bingAccountDeploy'
-}
-
 @description('Deploy the Foundry project into the Foundry account. This is the project is the home of the Foundry Agent Service.')
 module deployFoundryProject 'ai-foundry-project.bicep' = {
   scope: resourceGroup()
@@ -85,7 +81,6 @@ module deployFoundryProject 'ai-foundry-project.bicep' = {
   params: {
     location: location
     existingFoundryName: deployFoundry.outputs.foundryName
-    existingBingAccountName: deployBingAccount.outputs.bingAccountName
     existingWebApplicationInsightsResourceName: deployApplicationInsights.outputs.applicationInsightsName
   }
 }
@@ -166,6 +161,22 @@ module deployPostgres 'postgres.bicep' = {
 
 // Deploy the Azure Web App resources for the chat UI.
 
+module deployPrivateNetwork 'private-network.bicep' = {
+  name: 'privateNetworkDeploy'
+  params: {
+    baseName: baseName
+    location: location
+    foundryName: deployFoundry.outputs.foundryName
+    speechName: deploySpeech.outputs.speechName
+    translatorName: deployTranslator.outputs.translatorName
+    keyVaultName: deployKeyVault.outputs.keyVaultName
+    postgresName: deployPostgres.outputs.pgServerName
+    webPubSubName: deployWebPubSub.outputs.webPubSubName
+    applicationInsightsName: deployApplicationInsights.outputs.applicationInsightsName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+  }
+}
+
 @description('Deploy the web app for the front end demo UI. The web application will call into the Foundry Agent Service, Translator, Speech, Web PubSub, and Postgres — all via managed identity.')
 module deployWebApp 'web-app.bicep' = {
   scope: resourceGroup()
@@ -186,6 +197,10 @@ module deployWebApp 'web-app.bicep' = {
     existingAppServiceManagedIdentityName: appServiceManagedIdentity.name
     entraAppClientId: entraAppClientId
     entraAppAllowedAudience: entraAppAllowedAudience
+    trainingMemberObjectId: yourPrincipalId
+    aiAgentName: aiAgentName
+    aiAgentVersion: aiAgentVersion
+    appServiceSubnetId: deployPrivateNetwork.outputs.appServiceSubnetId
   }
 }
 
@@ -204,4 +219,12 @@ output postDeployHintKeyVault string = 'az keyvault secret set --vault-name ${de
 
 @description('Post-deploy hint: connect to Postgres with your Entra token to run the CREATE EXTENSION vector + migrations.')
 output postDeployHintPostgres string = 'PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv) psql "host=${deployPostgres.outputs.pgServerFqdn} dbname=${deployPostgres.outputs.pgDatabaseName} user=${yourPrincipalDisplayName} sslmode=require" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
+
+output appName string = deployWebApp.outputs.appName
+output appHostname string = deployWebApp.outputs.appHostname
+output managedIdentityClientId string = appServiceManagedIdentity.properties.clientId
+output managedIdentityPrincipalId string = appServiceManagedIdentity.properties.principalId
+output foundryName string = deployFoundry.outputs.foundryName
+output postgresName string = deployPostgres.outputs.pgServerName
+output keyVaultName string = deployKeyVault.outputs.keyVaultName
 

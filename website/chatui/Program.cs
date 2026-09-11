@@ -11,6 +11,18 @@ using Npgsql;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
+if (args is ["--initialize-database", var inputPath])
+{
+    await chatui.Data.DatabaseInitialization.RunAsync(inputPath);
+    return;
+}
+
+if (args is ["--initialize-services", var servicesInputPath])
+{
+    await chatui.Services.ServiceInitialization.RunAsync(servicesInputPath);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOptions<ChatApiOptions>()
@@ -144,6 +156,12 @@ builder.Services.AddOpenTelemetry().UseAzureMonitor();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+if (args is ["--verify-services"])
+{
+    await chatui.Services.ServiceInitialization.VerifyAsync(app.Services);
+    return;
+}
 
 app.Use(async (context, next) =>
 {

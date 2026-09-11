@@ -13,6 +13,11 @@ class PcmProcessor extends AudioWorkletProcessor {
     this._ratio = sampleRate / this._targetRate;
     this._buf = [];
     this.port.onmessage = (e) => {
+      if (e.data?.type === 'flush') {
+        this.emitFrame();
+        this.port.postMessage({ type: 'flushed' });
+        return;
+      }
       const rate = e.data?.targetRate;
       if (typeof rate === 'number' && rate > 0) {
         this._targetRate = rate;
@@ -34,6 +39,13 @@ class PcmProcessor extends AudioWorkletProcessor {
     const target = Math.floor(this._buf.length / this._ratio);
     if (target < minFrame) return true;
 
+    this.emitFrame();
+    return true;
+  }
+
+  emitFrame() {
+    const target = Math.floor(this._buf.length / this._ratio);
+    if (target === 0) return;
     const out = new Int16Array(target);
     for (let i = 0; i < target; i++) {
       const srcIdx = i * this._ratio;
@@ -49,7 +61,6 @@ class PcmProcessor extends AudioWorkletProcessor {
     // Drop the consumed source samples.
     this._buf.splice(0, Math.floor(target * this._ratio));
     this.port.postMessage(out.buffer, [out.buffer]);
-    return true;
   }
 }
 

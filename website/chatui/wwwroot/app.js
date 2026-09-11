@@ -2,6 +2,8 @@
 // Vanilla ES modules; no build step. Integrates Azure Speech SDK for STT+MT
 // and Neural TTS, and the Azure Web PubSub client for meeting fan-out.
 
+import { GuidedTraining } from './training-guided.js?v=1';
+
 const LANGUAGES = [
   { code: 'en', name: 'English',           stt: 'en-US', voice: 'en-US-EmmaMultilingualNeural', voices: { female: 'en-US-EmmaMultilingualNeural',  male: 'en-US-AndrewMultilingualNeural' } },
   { code: 'ru', name: 'Russian',           stt: 'ru-RU', voice: 'ru-RU-SvetlanaNeural',       voices: { female: 'ru-RU-SvetlanaNeural',    male: 'ru-RU-DmitryNeural' } },
@@ -165,9 +167,8 @@ const api = {
   summary:     (id, lang)       => api._req(`/api/meetings/${id}/summary` + (lang ? `?lang=${lang}` : '')),
   makeSummary: (id, b)          => api._req(`/api/meetings/${id}/summary`, { method: 'POST', body: b }),
   inboxToken:  ()               => api._req('/api/wps/inbox'),
-  speechToken: ()               => api._req('/api/speech/token'),
   translate:   (text, to, from, soften) => api._req('/api/translate', { method: 'POST', body: { text, to, from: from ?? null, soften: soften ?? false } }),
-  ttsSynth:    (text, voice)    => {
+  ttsSynth:    (text, voice, signal)    => {
     const headers = { 'Content-Type': 'application/json' };
     const dev = currentDevPersona();
     if (dev) {
@@ -179,6 +180,7 @@ const api = {
     return fetch('/api/speech/tts', {
       method: 'POST',
       headers,
+      signal,
       body: JSON.stringify({ text, voice }),
     });
   },
@@ -244,7 +246,7 @@ window.addEventListener('hashchange', route);
 window.addEventListener('popstate', route);
 
 // -------- Screens --------
-const screens = ['loading', 'signin', 'access-denied', 'talk', 'training', 'chats', 'meetings', 'meeting-room', 'join'];
+const screens = ['loading', 'signin', 'access-denied', 'load-error', 'talk', 'training', 'chats', 'meetings', 'meeting-room', 'join'];
 function show(name) {
   screens.forEach(s => document.getElementById('screen-' + s).hidden = s !== name);
   document.querySelectorAll('#tabs a').forEach(a => {
@@ -467,7 +469,7 @@ async function connectWps(meetingId, language) {
 
 async function bootstrapMeetingWps(url, meetingId, language, myUserId) {
   const client = new WebPubSubClient.WebPubSubClient({
-    getClientAccessUrl: async () => url,
+    getClientAccessUrl: async () => privatePubSubUrl(url),
     protocol: WebPubSubClient.WebPubSubJsonProtocol(),
   });
   client.on('group-message', (e) => handleWps(e.message.data));
@@ -576,18 +578,19 @@ function ensureWpsSdk() {
   return wpsSdkLoad;
 }
 
-let cachedSpeechToken = null;
-async function getSpeechToken() {
-  if (cachedSpeechToken && new Date(cachedSpeechToken.expiresAt).getTime() - Date.now() > 60000)
-    return cachedSpeechToken;
-  cachedSpeechToken = await api.speechToken();
-  return cachedSpeechToken;
-}
 async function getSpeechConfig(sdk, forTranslation) {
-  const { token, region } = await getSpeechToken();
+  const endpoint = new URL(`/api/relay/speech/${forTranslation ? 's2s' : 'stt'}/speech/universal/v2`, location.href);
+  endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return forTranslation
-    ? sdk.SpeechTranslationConfig.fromAuthorizationToken(token, region)
-    : sdk.SpeechConfig.fromAuthorizationToken(token, region);
+    ? sdk.SpeechTranslationConfig.fromEndpoint(endpoint, 'app-service-relay')
+    : sdk.SpeechConfig.fromEndpoint(endpoint, 'app-service-relay');
+}
+
+function privatePubSubUrl(accessUrl) {
+  const endpoint = new URL('/api/relay/pubsub', location.href);
+  endpoint.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  endpoint.searchParams.set('access_token', new URL(accessUrl).searchParams.get('access_token') ?? '');
+  return endpoint.toString();
 }
 
 async function enableMicIfPossible() {
@@ -980,6 +983,41 @@ let trainingPlaybackContext = null;
 let trainingWorklet = null;
 let trainingPlaybackAt = 0;
 let trainingCurrent = null;
+let trainingSignalTimer = null;
+let trainingPeak = 0;
+let trainingFramesReceived = 0;
+let trainingFinishing = false;
+let trainingFlush = null;
+let trainingFinishTimer = null;
+let trainingResponseDone = false;
+let trainingOriginalDone = false;
+
+const guidedTraining = new GuidedTraining({
+  createUrl: () => {
+    const url = new URL('/api/training/live', location.href);
+    url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('mode', 'guided');
+    url.searchParams.set('protocol', 'guided.v1');
+    const dev = currentDevPersona();
+    if (dev) {
+      url.searchParams.set('X-Dev-Oid', dev.oid);
+      url.searchParams.set('X-Dev-Name', dev.name);
+      url.searchParams.set('X-Dev-Email', dev.email);
+      url.searchParams.set('X-Dev-Lang', dev.lang);
+    }
+    return url.href;
+  },
+  microphoneId: () => loadMeetingPrefs().micDeviceId,
+  synthesize: (text, signal) => api.ttsSynth(text, 'en-GB-SoniaNeural', signal),
+});
+document.getElementById('training-mode').addEventListener('change', async event => {
+  await stopTraining();
+  const guided = event.target.value === 'guided' && state.me?.canUseGuidedTraining;
+  document.getElementById('training-free').hidden = guided;
+  document.getElementById('training-guided').hidden = !guided;
+  document.getElementById('training-status').hidden = guided;
+});
+window.addEventListener('pagehide', () => { void stopTraining(); });
 
 async function showTraining() {
   if (!state.me?.canUseTraining) {
@@ -988,6 +1026,7 @@ async function showTraining() {
   }
   if (talkActive || talkStarting) await stopTalk();
   show('training');
+  syncTalkControls();
 }
 
 async function startTraining() {
@@ -1004,9 +1043,13 @@ async function startTraining() {
       ...(micId ? { deviceId: { exact: micId } } : {}),
     },
   });
+  const microphoneTrack = trainingStream.getAudioTracks()[0];
+  const microphoneName = microphoneTrack?.label || 'system default microphone';
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   trainingCaptureContext = new AudioContextClass();
   trainingPlaybackContext = new AudioContextClass({ sampleRate: 24000 });
+  if (trainingCaptureContext.state === 'suspended') await trainingCaptureContext.resume();
+  if (trainingPlaybackContext.state === 'suspended') await trainingPlaybackContext.resume();
   await trainingCaptureContext.audioWorklet.addModule('/pcm-processor.js?v=2');
   const source = trainingCaptureContext.createMediaStreamSource(trainingStream);
   trainingWorklet = new AudioWorkletNode(trainingCaptureContext, 'pcm-processor');
@@ -1026,14 +1069,35 @@ async function startTraining() {
   trainingWs.binaryType = 'arraybuffer';
   const pending = [];
   trainingWorklet.port.onmessage = (event) => {
+    if (event.data?.type === 'flushed') { trainingFlush?.(); return; }
+    if (!(event.data instanceof ArrayBuffer)) return;
+    trainingFramesReceived++;
+    const samples = new Int16Array(event.data);
+    for (let index = 0; index < samples.length; index++) {
+      trainingPeak = Math.max(trainingPeak, Math.abs(samples[index]) / 0x8000);
+    }
+    if (trainingPeak >= 0.015 && !trainingFinishing) {
+      hint.textContent = `Microphone active: ${microphoneName}`;
+      if (trainingSignalTimer) clearTimeout(trainingSignalTimer);
+      trainingSignalTimer = null;
+    }
     if (trainingWs?.readyState === WebSocket.OPEN) trainingWs.send(event.data);
     else if (pending.length < 200) pending.push(event.data);
   };
   trainingWs.onopen = () => {
+    trainingCurrent = null;
+    ensureTrainingTurn();
     button.classList.add('recording');
     button.querySelector('.mic-label').textContent = 'Stop training';
     status.textContent = 'Listening';
-    hint.textContent = 'Listening… speak in any language.';
+    hint.textContent = `Listening through ${microphoneName}. Speak now…`;
+    trainingSignalTimer = setTimeout(() => {
+      if (trainingPeak < 0.015) {
+        hint.textContent = trainingFramesReceived === 0
+          ? `Microphone processing did not start (${trainingCaptureContext?.state || 'unknown'}). Stop and try again.`
+          : `No audio signal from ${microphoneName}. Check the Windows input device and its level.`;
+      }
+    }, 4000);
     while (pending.length) trainingWs.send(pending.shift());
   };
   trainingWs.onmessage = (event) => {
@@ -1052,7 +1116,7 @@ async function startTraining() {
 function handleTrainingMessage(message) {
   const results = document.getElementById('training-results');
   const hint = document.getElementById('training-hint');
-  if (message.type === 'turn_started') {
+  if (message.type === 'turn_started' && !trainingCurrent) {
     if (results.querySelector('.muted')) results.innerHTML = '';
     trainingCurrent = document.createElement('div');
     trainingCurrent.className = 'training-turn';
@@ -1067,6 +1131,10 @@ function handleTrainingMessage(message) {
       : trainingCurrent.dataset.original + (message.text || '');
     hint.textContent = `You: ${trainingCurrent.dataset.original.slice(-80)}`;
     renderTrainingTurn();
+    if (message.type === 'original_done') {
+      trainingOriginalDone = true;
+      completeTrainingPlayback();
+    }
   } else if (message.type === 'correction_delta' || message.type === 'correction_done') {
     ensureTrainingTurn();
     trainingCurrent.dataset.correction = message.type.endsWith('done')
@@ -1074,8 +1142,12 @@ function handleTrainingMessage(message) {
       : trainingCurrent.dataset.correction + (message.text || '');
     renderTrainingTurn();
     results.scrollTop = results.scrollHeight;
+  } else if (message.type === 'response_done') {
+    trainingResponseDone = true;
+    completeTrainingPlayback();
   } else if (message.type === 'error') {
     toast(message.message || 'Training model error', 'error');
+    void stopTraining();
   }
 }
 
@@ -1088,7 +1160,7 @@ function renderTrainingTurn() {
   const original = trainingCurrent.dataset.original || '';
   const correction = trainingCurrent.dataset.correction || '';
   trainingCurrent.innerHTML = `<div class="training-message training-message-user">${escapeHtml(original || '…')}</div>`
-    + `<div class="training-message training-message-coach">${escapeHtml(correction || '…')}</div>`;
+    + (correction ? `<div class="training-message training-message-coach">${escapeHtml(correction)}</div>` : '');
 }
 
 function playTrainingAudio(arrayBuffer) {
@@ -1098,14 +1170,66 @@ function playTrainingAudio(arrayBuffer) {
   const output = buffer.getChannelData(0);
   for (let index = 0; index < input.length; index++) output[index] = input[index] / 0x8000;
   const source = trainingPlaybackContext.createBufferSource();
+  const playbackContext = trainingPlaybackContext;
   source.buffer = buffer;
   source.connect(trainingPlaybackContext.destination);
+  source.onended = () => {
+    source.disconnect();
+    if (trainingPlaybackContext === playbackContext) completeTrainingPlayback();
+  };
   const startAt = Math.max(trainingPlaybackContext.currentTime, trainingPlaybackAt);
   source.start(startAt);
   trainingPlaybackAt = startAt + buffer.duration;
 }
 
+function completeTrainingPlayback() {
+  if (!trainingFinishing || !trainingResponseDone || !trainingOriginalDone) return;
+  if (trainingFinishTimer) clearTimeout(trainingFinishTimer);
+  trainingFinishTimer = null;
+  if (trainingPlaybackContext && trainingPlaybackContext.currentTime < trainingPlaybackAt) return;
+  trainingFinishing = false;
+  void stopTraining();
+}
+
+async function finishTraining() {
+  if (trainingFinishing || trainingWs?.readyState !== WebSocket.OPEN) return;
+  trainingFinishing = true;
+  const socket = trainingWs;
+  const button = document.getElementById('training-mic');
+  button.disabled = true;
+  button.classList.remove('recording');
+  button.querySelector('.mic-label').textContent = 'Processing';
+  document.getElementById('training-status').textContent = 'Translating';
+  document.getElementById('training-hint').textContent = 'Processing your recording…';
+  if (trainingSignalTimer) clearTimeout(trainingSignalTimer);
+  trainingSignalTimer = null;
+  await trainingCaptureContext.suspend();
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      trainingFlush = null;
+      reject(new Error('Could not finish microphone recording. Please try again.'));
+    }, 2000);
+    trainingFlush = () => { clearTimeout(timeout); trainingFlush = null; resolve(); };
+    trainingWorklet.port.postMessage({ type: 'flush' });
+  });
+  if (trainingWs !== socket) return;
+  trainingWorklet.port.onmessage = null;
+  trainingWorklet.disconnect();
+  trainingWorklet = null;
+  trainingStream?.getTracks().forEach(track => track.stop());
+  trainingStream = null;
+  await trainingCaptureContext.close();
+  trainingCaptureContext = null;
+  if (trainingWs !== socket) return;
+  socket.send(JSON.stringify({ type: 'recording.finish' }));
+  trainingFinishTimer = setTimeout(() => {
+    toast('The recording could not be completed in time. Please try again.', 'error');
+    void stopTraining();
+  }, 180000);
+}
+
 async function stopTraining() {
+  await guidedTraining.stop();
   const socket = trainingWs;
   trainingWs = null;
   if (socket) {
@@ -1124,8 +1248,20 @@ async function stopTraining() {
   trainingCaptureContext = null;
   trainingPlaybackContext = null;
   trainingPlaybackAt = 0;
+  trainingFinishing = false;
+  trainingResponseDone = false;
+  trainingOriginalDone = false;
+  trainingFlush?.();
+  trainingFlush = null;
+  if (trainingFinishTimer) clearTimeout(trainingFinishTimer);
+  trainingFinishTimer = null;
+  if (trainingSignalTimer) clearTimeout(trainingSignalTimer);
+  trainingSignalTimer = null;
+  trainingPeak = 0;
+  trainingFramesReceived = 0;
   trainingCurrent = null;
   const button = document.getElementById('training-mic');
+  button.disabled = false;
   button.classList.remove('recording');
   button.querySelector('.mic-label').textContent = 'Start training';
   document.getElementById('training-status').textContent = 'Idle';
@@ -1133,9 +1269,10 @@ async function stopTraining() {
 }
 
 document.getElementById('training-mic').addEventListener('click', async () => {
-  try { if (trainingWs) await stopTraining(); else await startTraining(); }
+  try { if (trainingWs) await finishTraining(); else await startTraining(); }
   catch (error) { await stopTraining(); handleError(error); }
 });
+document.getElementById('training-mic-device').addEventListener('click', openMicDeviceDialog);
 document.getElementById('training-clear').addEventListener('click', () => {
   document.getElementById('training-results').innerHTML = '<div class="muted center">Nothing yet.</div>';
   trainingCurrent = null;
@@ -1152,13 +1289,15 @@ function syncTalkControls() {
   // Mic device description — resolves the stored deviceId to a friendly label
   // if we've seen the device before, otherwise shows "System default".
   const micDesc = document.getElementById('talk-mic-device-desc');
-  if (micDesc) {
+  const trainingMicDesc = document.getElementById('training-mic-device-desc');
+  for (const desc of [micDesc, trainingMicDesc]) {
+    if (!desc) continue;
     const id = prefs.micDeviceId;
     if (!id) {
-      micDesc.textContent = 'System default (browser chooses)';
+      desc.textContent = 'System default (browser chooses)';
     } else {
       const cached = knownMicDevices.get(id);
-      micDesc.textContent = cached || 'Custom microphone';
+      desc.textContent = cached || 'Custom microphone';
     }
   }
   // Recognition mode description
@@ -1230,7 +1369,13 @@ async function openMicDeviceDialog() {
     saveMeetingPrefs({ micDeviceId: chosen || null });
     dlg.close();
     syncTalkControls();
-    if (talkActive) {
+    if (guidedTraining.active) {
+      await guidedTraining.stop('Microphone changed. Start a new attempt.');
+    } else if (trainingWs) {
+      toast('Restarting training with new microphone…', 'success');
+      await stopTraining();
+      setTimeout(() => startTraining(), 250);
+    } else if (talkActive) {
       toast('Restarting recognition with new microphone…', 'success');
       await stopTalk();
       setTimeout(() => startTalk(), 250);
@@ -2369,7 +2514,7 @@ async function connectInbox() {
     // requires message-acking that our server-side SendToGroup doesn't
     // participate in, so subscriptions silently drop messages.
     inboxClient = new WebPubSubClient.WebPubSubClient({
-      getClientAccessUrl: async () => url,
+      getClientAccessUrl: async () => privatePubSubUrl(url),
       protocol: WebPubSubClient.WebPubSubJsonProtocol(),
     });
     inboxClient.on('group-message', (e) => handleInboxMessage(e.message.data));
@@ -2416,10 +2561,14 @@ async function boot() {
       show('access-denied');
       return;
     }
-    show('signin'); return;
+    document.getElementById('load-error-message').textContent = e instanceof ApiError
+      ? `The profile service returned HTTP ${e.status}. Please try again.`
+      : 'The profile service could not be reached or returned an invalid response. Please try again.';
+    show('load-error'); return;
   }
   updateMeUi();
   document.querySelector('[data-tab="training"]').hidden = !state.me.canUseTraining;
+  document.getElementById('training-mode').hidden = !state.me.canUseGuidedTraining;
   document.getElementById('tabs').hidden = false;
   document.getElementById('me').hidden = false;
   await route();

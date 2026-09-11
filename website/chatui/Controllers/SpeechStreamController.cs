@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -35,7 +34,6 @@ public class SpeechStreamController(
     IUserContext userContext,
     TokenCredential credential,
     IOptions<SpeechOptions> speechOptions,
-    IHttpClientFactory httpFactory,
     ILogger<SpeechStreamController> logger) : ControllerBase
 {
     private static readonly string[] CognitiveServicesScopes =
@@ -59,11 +57,10 @@ public class SpeechStreamController(
 
         using var ws = await HttpContext.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
 
-        // Exchange the AAD token for a Speech STS token — same pattern as the
-        // TTS endpoint. AAD directly doesn't work against the STT websocket.
         var opts = speechOptions.Value;
-        var speechJwt = await IssueSpeechTokenAsync(opts, ct).ConfigureAwait(false);
-        var speechCfg = SpeechConfig.FromAuthorizationToken(speechJwt, opts.Region);
+        var token = await credential.GetTokenAsync(new TokenRequestContext(CognitiveServicesScopes), ct).ConfigureAwait(false);
+        var speechCfg = SpeechConfig.FromEndpoint(new UriBuilder(opts.Endpoint) { Scheme = "wss", Port = -1 }.Uri);
+        speechCfg.AuthorizationToken = $"aad#{opts.ResourceId}#{token.Token}";
         speechCfg.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
         // Bias the continuous LID for accuracy over latency — matches what the
         // browser code was doing before the migration.
@@ -186,20 +183,6 @@ public class SpeechStreamController(
             .ToList() ?? [];
         if (langs.Count == 0) langs.Add("en-US");
         return langs;
-    }
-
-    private async Task<string> IssueSpeechTokenAsync(SpeechOptions opts, CancellationToken ct)
-    {
-        var accessToken = await credential
-            .GetTokenAsync(new TokenRequestContext(CognitiveServicesScopes), ct)
-            .ConfigureAwait(false);
-        var http = httpFactory.CreateClient();
-        var accountBase = opts.Endpoint.TrimEnd('/');
-        using var issueReq = new HttpRequestMessage(HttpMethod.Post, $"{accountBase}/sts/v1.0/issueToken");
-        issueReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Token);
-        using var issueResp = await http.SendAsync(issueReq, ct).ConfigureAwait(false);
-        issueResp.EnsureSuccessStatusCode();
-        return (await issueResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false)).Trim();
     }
 
     private static async Task SendJsonAsync<T>(WebSocket ws, SemaphoreSlim gate, T payload, CancellationToken ct)

@@ -13,7 +13,7 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('The name of the workload\'s existing Log Analytics workspace.')
@@ -66,10 +66,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     enablePurgeProtection: true
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
     networkAcls: {
-      defaultAction: 'Allow'
-      bypass: 'AzureServices'
+      defaultAction: 'Deny'
+      bypass: 'None'
       ipRules: []
       virtualNetworkRules: []
     }

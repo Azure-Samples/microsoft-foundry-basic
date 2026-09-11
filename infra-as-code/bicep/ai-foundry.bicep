@@ -6,7 +6,7 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('The name of the workload\'s existing Log Analytics workspace.')
@@ -18,7 +18,7 @@ param logAnalyticsWorkspaceName string
 @minLength(36)
 param foundryPortalUserPrincipalId string
 
-var foundryName = 'aif${baseName}'
+var foundryName = contains(baseName, '-') ? 'ai-${baseName}' : 'aif${baseName}'
 
 // ---- Existing resources ----
 
@@ -51,12 +51,12 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     allowProjectManagement: true // Microsoft Foundry account + projects
     disableLocalAuth: true
     networkAcls: {
-      bypass: 'AzureServices'
+      bypass: 'None'
       ipRules: []
-      defaultAction: 'Allow'
+      defaultAction: 'Deny'
       virtualNetworkRules: []
     }
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
   }
 
   @description('Models are managed at the account level. Deploy the GPT model that will be used for the Foundry agent logic.')
@@ -69,8 +69,8 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     properties: {
       model: {
         format: 'OpenAI'
-        name: 'gpt-4.1'
-        version: '2025-04-14'  // Use a model version available in your region.
+        name: 'gpt-5.4-mini'
+        version: '2026-03-17'
       }
       versionUpgradeOption: 'NoAutoUpgrade' // Production deployments should not auto-upgrade models.  Testing compatibility is important.
     }
@@ -79,6 +79,9 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   @description('Realtime speech model used by the restricted English Training mode.')
   resource trainingModel 'deployments' = {
     name: 'gpt-realtime-2.1'
+    dependsOn: [
+      model
+    ]
     sku: {
       capacity: 1
       name: 'GlobalStandard'
@@ -88,6 +91,25 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
         format: 'OpenAI'
         name: 'gpt-realtime-2.1'
         version: '2026-07-07'
+      }
+      versionUpgradeOption: 'NoAutoUpgrade'
+    }
+  }
+
+  resource transcriptionModel 'deployments' = {
+    name: 'gpt-live-transcribe'
+    dependsOn: [
+      trainingModel
+    ]
+    sku: {
+      capacity: 1
+      name: 'GlobalStandard'
+    }
+    properties: {
+      model: {
+        format: 'OpenAI'
+        name: 'gpt-live-transcribe'
+        version: '2026-07-28'
       }
       versionUpgradeOption: 'NoAutoUpgrade'
     }
@@ -126,7 +148,7 @@ resource azureDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-prev
       }
       {
         category: 'RequestResponse'
-        enabled: true
+        enabled: false
         retentionPolicy: {
           enabled: false
           days: 0
@@ -142,7 +164,7 @@ resource azureDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-prev
       }
       {
         category: 'Trace'
-        enabled: true
+        enabled: false
         retentionPolicy: {
           enabled: false
           days: 0

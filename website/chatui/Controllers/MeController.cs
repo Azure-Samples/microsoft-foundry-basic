@@ -1,13 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using chatui.Auth;
 using chatui.Data;
+using chatui.Configuration;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace chatui.Controllers;
 
 [ApiController]
 [Route("api/me")]
-public class MeController(IUserContext userContext, TranslatorDbContext dbContext) : ControllerBase
+public class MeController(IUserContext userContext, TranslatorDbContext dbContext, IOptions<ChatApiOptions> options) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<MeResponse>> Get(CancellationToken cancellationToken)
@@ -33,19 +35,21 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
         return Ok(ToResponse(user));
     }
 
-    private static MeResponse ToResponse(Data.Entities.User user) => new(
+    private MeResponse ToResponse(Data.Entities.User user) => new(
         user.Id,
         user.DisplayName,
         user.Email,
         user.PreferredLanguage,
-        TrainingAccess.IsMember(user));
+        TrainingAccess.IsMember(user, options.Value.TrainingMemberObjectIds),
+        TrainingAccess.IsMember(user, options.Value.TrainingMemberObjectIds) && options.Value.TrainingGuidedEnabled);
 
     public sealed record MeResponse(
         Guid Id,
         string DisplayName,
         string Email,
         string PreferredLanguage,
-        bool CanUseTraining);
+        bool CanUseTraining,
+        bool CanUseGuidedTraining);
 
     public sealed record MePatchRequest([StringLength(16, MinimumLength = 2)] string? PreferredLanguage);
 }

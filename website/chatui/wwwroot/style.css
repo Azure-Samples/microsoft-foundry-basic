@@ -130,6 +130,15 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 
 .talk-hint { margin: 10px 2px 14px; text-align: center; min-height: 20px; }
 .training-results { margin-top: 16px; }
+.training-mode { display: flex; flex-wrap: wrap; gap: 16px; border: 0; padding: 0; margin: 0 0 16px; }
+.training-mode label { display: inline-flex; align-items: center; gap: 6px; }
+.training-mode input { width: auto; }
+#training-mode[hidden], #training-guided[hidden], #training-guided [hidden] { display: none !important; }
+.guided-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+#training-guided textarea { width: 100%; box-sizing: border-box; resize: vertical; margin: 8px 0; }
+#training-guided audio { width: 100%; max-width: 400px; }
+#training-guided p { overflow-wrap: anywhere; white-space: pre-wrap; }
+#training-guided .btn { white-space: normal; min-height: 44px; }
 .training-turn { display: flex; flex-direction: column; gap: 6px; }
 .training-message {
   width: fit-content;

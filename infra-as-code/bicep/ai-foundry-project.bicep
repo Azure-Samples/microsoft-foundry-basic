@@ -8,20 +8,11 @@ param location string = resourceGroup().location
 @minLength(2)
 param existingFoundryName string
 
-@description('The existing Bing grounding data account that is available to Foundry agents in this project.')
-@minLength(1)
-param existingBingAccountName string
-
 @description('The existing Application Insights instance to log token usage in this project.')
 @minLength(1)
 param existingWebApplicationInsightsResourceName string
 
 // ---- Existing resources ----
-
-#disable-next-line BCP081
-resource bingAccount 'Microsoft.Bing/accounts@2025-05-01-preview' existing = {
-  name: existingBingAccountName
-}
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: existingWebApplicationInsightsResourceName
@@ -40,8 +31,8 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
       type: 'SystemAssigned'
     }
     properties: {
-      description: 'Chat using internet data in your Foundry agent.'
-      displayName: 'Chat with Internet Data'
+      description: 'Private reasoning services for AI Translator.'
+      displayName: 'AI Translator'
     }
 
     @description('Connect this project to application insights for visualization of token usage.')
@@ -63,28 +54,6 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
       }
     }
 
-    @description('Create project connection to Bing grounding data. Useful for future agents that get created.')
-    resource bingGroundingConnection 'connections' = {
-      name: replace(existingBingAccountName, '-', '')
-      properties: {
-        authType: 'ApiKey'
-        target: bingAccount.properties.endpoint
-        category: 'GroundingWithBingSearch'
-        metadata: {
-          type: 'bing_grounding'
-          ApiType: 'Azure'
-          ResourceId: bingAccount.id
-          location: bingAccount.location
-        }
-        credentials: {
-          key: bingAccount.listKeys().key1
-        }
-        isSharedToAll: false
-      }
-      dependsOn: [
-        applicationInsightsConnection  // Single thread changes to the project, else conflict errors tend to happen
-      ]
-    }
   }
 }
 

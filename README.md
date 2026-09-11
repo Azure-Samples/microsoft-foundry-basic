@@ -4,7 +4,7 @@ Multilingual chat and on-site meeting translator hosted on Azure and powered by 
 
 - **Personal chat** — pick a peer, type or dictate a message, it lands in the peer's language. Full history is stored per user; nobody sees anyone else's chats.
 - **On-site meetings** — the initiator creates a meeting and gets a QR code and a shareable link. Guests scan/click, sign in, pick their language, and start receiving real-time translated speech in their own language via Web PubSub + Neural TTS. Each participant only sees their language stream.
-- **Foundry agent** — Microsoft Foundry (`gpt-4.1`) is used only for meeting-summary generation and best-effort "who is being addressed" inference. Translation itself is done by Azure AI Translator (text) and Azure AI Speech Translation (voice) for lower latency and predictable cost.
+- **Foundry agent** — Microsoft Foundry (`agent-model`, currently `gpt-5.4-mini`) is used for meeting-summary generation and best-effort "who is being addressed" inference. Translation itself is done by Azure AI Translator (text) and Azure AI Speech Translation (voice). Training uses the separate realtime model.
 
 Full design (schema, REST API, WPS protocol, JWT claims, sequence diagrams): [`docs/translator-design.md`](./docs/translator-design.md).
 
@@ -17,7 +17,7 @@ flowchart LR
   API[Azure App Service<br/>.NET 10 API]
   T[Azure AI Translator]
   S[Azure AI Speech<br/>Speech Translation + TTS]
-  F[Foundry Agent Service<br/>gpt-4.1]
+  F[Foundry Agent Service<br/>agent-model]
   WPS[Azure Web PubSub]
   PG[(PostgreSQL Flexible Server<br/>pgvector)]
   KV[Azure Key Vault]
@@ -25,15 +25,14 @@ flowchart LR
   Client -->|/api/*| EA --> API
   API -->|IOptions + MI| KV
   API -->|SDK + Entra| T
-  API -->|Mint token| S
+  API -->|Private Endpoint: SDK + Entra| S
   API -->|Runs agent| F
   API -->|Publish groups| WPS
   API -->|Npgsql + Entra token| PG
-  Client -.->|Speech SDK + short-lived Entra token| S
-  Client -.->|WebSocket, per-language group| WPS
+  Client -->|Same-origin Speech / PubSub WebSocket relay| API
 ```
 
-**Data isolation** — every repository query is scoped by the current `userId` from Easy Auth. Meetings are additionally scoped by participant membership; a listener only ever receives their preferred-language group over Web PubSub. Original meeting audio never leaves the browser.
+**Data isolation** — every repository query is scoped by the current `userId` from Easy Auth. Meetings are additionally scoped by participant membership; a listener only ever receives their preferred-language group over Web PubSub. Audio is streamed through App Service to the private Speech or Foundry endpoint.
 
 **All-Entra, no keys** — Translator, Speech, Web PubSub, Postgres, and Key Vault all authenticate the App Service user-assigned managed identity. `disableLocalAuth: true` is set on every service that supports it, and Postgres has `passwordAuth: Disabled`.
 
@@ -52,7 +51,7 @@ scripts/deploy-infra.sh  Bicep deploy wrapper
 
 - An [Azure subscription](https://azure.microsoft.com/free/) with these resource providers registered: `Microsoft.CognitiveServices`, `Microsoft.Insights`, `Microsoft.ManagedIdentity`, `Microsoft.OperationalInsights`, `Microsoft.Storage`, `Microsoft.DBforPostgreSQL`, `Microsoft.SignalRService`, `Microsoft.KeyVault`.
 - Sufficient quota in your chosen region:
-  - Foundry / OpenAI: `gpt-4.1` deployment (50k TPM).
+  - Foundry / OpenAI: `gpt-5.4-mini` reasoning deployment (50k TPM), plus `gpt-realtime-2.1` and `gpt-live-transcribe` for Training.
   - App Service Plan: B1 Linux (raise for load).
   - Postgres Flexible Server: `Standard_B1ms` Burstable.
   - Web PubSub: 1 unit Standard.
@@ -62,6 +61,50 @@ scripts/deploy-infra.sh  Bicep deploy wrapper
 - Local tools: [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), `.NET 10 SDK`, `dotnet-ef` global tool (`dotnet tool install --global dotnet-ef --version 10.0.1`), `psql` (for one-time DB bootstrap), `openssl` (for the join-token seed).
 
 ## Deploy
+
+### Private Networking
+
+Only App Service accepts public application traffic. Its VNet integration reaches Foundry,
+Speech, Translator, Key Vault, PostgreSQL, Web PubSub, and Azure Monitor through Private
+Endpoints and linked private DNS zones. Public ingestion and queries are disabled for
+Application Insights and Log Analytics. Bing Grounding is not provisioned.
+
+Browser Speech and PubSub connections use `/api/relay/*` on the application origin.
+Speech credentials stay on the server; PubSub retains its issued per-user group permissions.
+Administrative SCM access uses Entra authentication, not publishing passwords.
+
+Initial data-plane setup must run inside the VNet, for example through authenticated SCM.
+The existing application supports `--initialize-database <inputPath>` and
+`--initialize-services <inputPath>` for one-time setup. Input JSON contracts are defined in
+`DatabaseInitialization` and `ServiceInitialization`. They delete the input file after reading.
+Supply short-lived administrator tokens in a protected, temporary directory outside web root;
+never put credentials in source control, command arguments, logs, or deployment artifacts.
+SCM may have an older .NET runtime, so use a self-contained Linux build for these commands.
+Remove temporary inputs and bootstrap binaries after setup. Database migrations run as the
+deployer; the runtime identity receives only application-table permissions.
+
+Set `aiAgentName` and `aiAgentVersion` to the bootstrapped agent version when redeploying IaC.
+`TrainingMemberObjectIds` controls access to both Free and Guided Practice. Guided Practice is
+enabled by `TrainingGuidedEnabled`. The optional `--verify-services` command must run in the app container with its managed
+identity, not SCM. Never leave the diagnostic startup script configured for normal operation.
+
+Free Practice treats Start through Stop as one recording, including pauses. Stop commits the
+entire recording for one English translation or correction and spoken response. The original
+transcript appears after Stop in one message; playback finishes before the next recording.
+
+The September 2026 private deployment passed runtime managed-identity checks for PostgreSQL,
+Translator, Key Vault, Speech synthesis, Web PubSub, Foundry summarisation, and the Training
+realtime connection. Speech SDK 1.51.2 is required by this verified build; 1.43.0 failed in the
+current Linux App Service image even though the same endpoint worked through .NET WebSocket.
+The operator confirmed browser sign-in and microphone capture on September 10, 2026; Guided
+Practice was then enabled for the existing Training members. A complete Guided exercise still
+requires live acceptance testing. This first slice is session-only: persistent progress,
+spaced review, and daily workouts are not implemented yet.
+
+Rotate the Easy Auth application credential before its expiry (the initial credential expires
+in March 2027), update `entra-login-client-secret` in Key Vault from inside the VNet, and refresh
+the App Service Key Vault reference before removing the previous Entra credential.
+
 
 The workload has been tested in `swedencentral`. Other quota-available regions in the Foundry list (`eastus2`, `uksouth`, `westeurope`, `australiaeast`, ...) should also work.
 

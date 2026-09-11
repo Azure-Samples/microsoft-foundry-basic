@@ -20,9 +20,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="AI Translator" />
 
-  <link rel="stylesheet" href="/style.css?v=51" />
+  <link rel="stylesheet" href="/style.css?v=52" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=51" defer></script>
+  <script type="module" src="/app.js?v=53" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -49,7 +49,7 @@
     <section class="screen" id="screen-signin" hidden>
       <h1>Sign in required</h1>
       <p>You need to sign in with your work account to use the translator.</p>
-      <a class="btn primary" href="/.auth/login/aad?post_login_redirect_url=/">Sign in with Microsoft</a>
+      <a class="btn primary" href="/.auth/login/aad?post_login_redirect_uri=/">Sign in with Microsoft</a>
       <details class="muted">
         <summary>Or configure DevAuth (developers)</summary>
         <p class="hint">Set <code>DevAuth__Enabled=true</code> and related values in <code>appsettings.Development.json</code> or App Service settings.</p>
@@ -59,6 +59,12 @@
     <section class="screen" id="screen-access-denied" hidden>
       <h1>Demo user required</h1>
       <p id="access-denied-message">Specify an existing demo user in the URL.</p>
+    </section>
+
+    <section class="screen" id="screen-load-error" hidden>
+      <h1>Unable to load your profile</h1>
+      <p id="load-error-message" role="alert"></p>
+      <a class="btn primary" href="">Retry</a>
     </section>
 
     <section class="screen" id="screen-talk" hidden>
@@ -119,12 +125,26 @@
         <h2>English training</h2>
         <span class="pill" id="training-status">Idle</span>
       </div>
+      <fieldset id="training-mode" class="training-mode" hidden>
+        <legend class="small">Practice mode</legend>
+        <label><input type="radio" name="training-mode" value="free" checked /> Free Practice</label>
+        <label><input type="radio" name="training-mode" value="guided" /> Guided Practice</label>
+      </fieldset>
+      <div id="training-free">
       <p class="muted small">Speak in any language. The coach translates it into natural English, or polishes your English when needed, while preserving your style.</p>
       <button class="mic-big" id="training-mic">
         <span class="mic-icon">🎙️</span>
         <span class="mic-label">Start training</span>
       </button>
       <div class="talk-hint muted small" id="training-hint">Press <strong>Start training</strong> and grant microphone access.</div>
+      <button class="tool-row" type="button" id="training-mic-device">
+        <span class="tool-icon">🎙️</span>
+        <span class="tool-body">
+          <span class="tool-title">Microphone</span>
+          <span class="tool-desc" id="training-mic-device-desc">Tap to choose which microphone to use</span>
+        </span>
+        <span class="tool-chev">›</span>
+      </button>
       <button class="tool-row" type="button" id="training-clear">
         <span class="tool-icon">🧹</span>
         <span class="tool-body">
@@ -133,6 +153,46 @@
         </span>
       </button>
       <div class="subtitles training-results" id="training-results"><div class="muted center">Nothing yet.</div></div>
+      </div>
+      <div id="training-guided" hidden>
+        <div class="row-between">
+          <h3>Guided Practice</h3>
+          <span class="pill" id="guided-status" role="status" aria-live="polite">Ready</span>
+        </div>
+        <label for="guided-register">Conversation</label>
+        <select id="guided-register">
+          <option value="customer">With a customer</option>
+          <option value="internal">With a colleague</option>
+        </select>
+        <p class="muted small">Audio is processed by the configured Azure service. This app does not save practice audio or transcripts. Provider retention policies apply.</p>
+        <div class="guided-actions">
+          <button class="btn primary" id="guided-start" type="button">🎙️ Start attempt</button>
+          <button class="btn primary" id="guided-finish" type="button" hidden>✓ Finish answer</button>
+          <button class="btn secondary" id="guided-cancel" type="button" hidden>Cancel</button>
+        </div>
+        <div id="guided-review" hidden>
+          <label for="guided-transcript">Recognised text</label>
+          <textarea id="guided-transcript" rows="5" maxlength="6000" spellcheck="true"></textarea>
+          <button class="btn primary" id="guided-coach" type="button">Get coaching</button>
+        </div>
+        <div id="guided-feedback" hidden>
+          <h4 id="guided-feedback-type"></h4>
+          <p id="guided-natural" class="training-message training-message-coach"></p>
+          <p id="guided-tip"></p>
+          <p id="guided-assessment" class="muted small"></p>
+        </div>
+        <p id="guided-aid"></p>
+        <div class="guided-actions">
+          <button class="btn secondary" id="guided-listen" type="button" hidden>🔈 Listen</button>
+          <button class="btn secondary" id="guided-hint" type="button" hidden>Reveal hint</button>
+          <button class="btn secondary" id="guided-answer" type="button" hidden>Reveal answer</button>
+          <button class="btn primary" id="guided-retry" type="button" hidden>Try again</button>
+          <button class="btn secondary" id="guided-new" type="button" hidden>New thought</button>
+        </div>
+        <audio controls aria-label="Synthetic British English example" hidden></audio>
+        <p class="muted small">Model audio: synthetic voice</p>
+        <p id="guided-notice" role="status" aria-live="polite"></p>
+      </div>
     </section>
 
     <section class="screen" id="screen-chats" hidden>

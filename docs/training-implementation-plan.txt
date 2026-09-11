@@ -1,0 +1,638 @@
+TRAINING MODE: IMPLEMENTATION PLAN FOR CODING AGENTS
+Date: 2026-09-10
+Status: Proposed implementation contract; no application changes made by this plan.
+Revision: 2026-09-10 - independent JSON producer and application pull added.
+
+1. PURPOSE AND PRODUCT PRINCIPLES
+
+Transform Training from an immediate translator/corrector into a spoken-fluency
+practice loop:
+
+Attempt -> Natural option -> Retry without help -> Apply in a new situation
+        -> Retrieve again after a delay.
+
+The target is natural, professional British spoken English, not textbook grammar
+as the primary objective. Teach reusable chunks, collocations, phrasal verbs,
+contractions, clarification, tactful disagreement and concise explanations.
+An already grammatical phrase can still receive a conversational alternative.
+Do not label a register preference as a grammatical error.
+
+Preserve meaning, names, numbers, terminology, uncertainty and commitments.
+Accept alternative good answers; never grade by exact reference-text matching.
+Do not claim that one wording represents all native speakers. Synthetic audio is
+a model example, not a recording of a native speaker.
+
+Retain the existing Free Practice experience. New behaviours must be opt-in.
+English and Russian can both be used to formulate an initial thought. A Russian
+attempt can be translated, but is not evidence of independent English retrieval.
+Hints and listening to a model answer must be distinguished from unaided recall.
+
+2. OBSERVED REPOSITORY BASELINE
+
+Reconfirm these observations before implementing; the repository can change.
+
+- website\chatui\Controllers\TrainingController.cs:
+  GET /api/training/live; access checked with IUserContext and TrainingAccess.
+  Connects to gpt-realtime-2.1 using a server-side Entra credential.
+  Input/output PCM is 24 kHz. Input transcription uses gpt-live-transcribe.
+  Server VAD currently creates responses automatically after a short silence.
+  The prompt preserves style and repeats acceptable English unchanged.
+  Incoming client text messages are currently ignored by the audio pump.
+  Outgoing events include turn_started, original_delta, original_done,
+  correction_delta, correction_done, audio and error.
+- website\chatui\wwwroot\app.js:
+  Training capture, playback and UI use shared mutable state, including one
+  trainingCurrent element; the answer is displayed and spoken immediately.
+- website\chatui\wwwroot\index.html:
+  Contains the Training screen and controls.
+- website\chatui\Auth\TrainingAccess.cs:
+  Existing membership gate must remain on all new Training entry points.
+  Do not change membership or add identities as part of this work.
+- website\chatui\Data\TranslatorDbContext.cs:
+  Currently configures Users only. EF Core/PostgreSQL plumbing already exists.
+- website\chatui\Services\TransientSessionStore.cs:
+  Existing transient application storage is not a durable review scheduler.
+- website\chatui\Program.cs:
+  Existing DI, managed identity, EF Core and telemetry integration.
+- website\chatui\chatui.csproj:
+  .NET 10. No test project was found in the initial inspection.
+
+README architecture statements are not a substitute for inspecting current code.
+At plan creation, app.js and index.html had uncommitted changes. Preserve them;
+re-read their latest contents and diff before touching them. Do not reset,
+overwrite, commit or deploy unrelated changes.
+
+3. DELIVERY RULES
+
+- Implement stages in order; each stage must pass its exit criteria.
+- Keep each stage reviewable. Do not implement optional later stages implicitly.
+- Use existing services and packages where suitable. No new frontend framework,
+  vector database, agent platform or infrastructure deployment for the core MVP.
+- Never guess a model deployment. Verify required capabilities and configuration.
+  Do not automatically fall back to another model or silently skip evaluation.
+- Separate deterministic exercise state/scheduling from model-generated coaching.
+- Preserve current authentication, data isolation and Free Practice behaviour.
+- Do not put tokens, private speech, recordings or real meeting excerpts in source
+  control, fixtures, logs or diagnostic evidence. Use synthetic fixtures.
+- No automatic import of Microsoft 365 transcripts; no assumption that a
+  personal app is an approved destination for classified work information.
+  Stages 5A-5B add an opt-in, policy-gated learning-context pipeline, not permission
+  to export raw work transcripts. A separate producer automation has been created
+  but remains disabled until its destination and access controls are configured.
+- Record stage evidence in the implementation handoff: changed files, commands,
+  outcomes, unresolved limitations and whether a live model was exercised.
+  A passing mock test is not evidence that a live speech deployment works.
+
+4. TARGET DESIGN
+
+Transport:
+  Keep /api/training/live compatible with existing Free Practice clients.
+  Add a negotiated/versioned protocol for exercises instead of silently changing
+  the meaning of existing messages. Validate text controls and binary audio.
+
+Proposed services (names may follow existing repository conventions):
+  TrainingSessionService: exercise state and attempt ownership.
+  TrainingCoachService: structured, meaning-preserving feedback.
+  TrainingPhraseService: personal phrase library and approved content.
+  TrainingReviewScheduler: deterministic due dates and review transitions.
+  TrainingExerciseService: exercise selection and scenario variants.
+
+Frontend:
+  Extract coherent Training modules from app.js only where needed.
+  Keep the existing application shell, routing and microphone selection.
+  Separate audio transport/playback from exercise state and rendering.
+
+Exercise state:
+  prompt -> recording -> processing -> feedback -> retry/completed
+  cancellation and recoverable failure must be explicit states.
+  Model playback is a controlled activity, not a successful user attempt.
+
+Identifiers:
+  sessionId, exerciseId, attemptId and turnId accompany relevant events.
+  Retain upstream item/response identifiers to correlate delayed events.
+  Enforce ownership server-side; a client-supplied ID grants no access.
+
+Structured coaching result:
+  recognisedText, naturalVersion,
+  feedbackType (correction/conversationalAlternative/alreadyNatural),
+  meaningPreserved, targetConstructionUsed, oneActionableTip,
+  needsClarification.
+  Use unknown/notAssessable where appropriate; do not manufacture confidence.
+  Track language and hint/reveal state independently of model judgements.
+
+Separate a conversational coaching service from the existing literal correction
+policy. A text evaluation call may be used if the realtime deployment cannot
+reliably provide the needed structure; select a configured, available deployment.
+Validate model output against typed contracts. Fail explicitly on invalid output.
+Keep user transcripts as data, not instructions that can override coaching rules.
+
+Proposed durable entities:
+  TrainingPhrase: owner, construction, intent, register, natural variants.
+  TrainingExercise: phrase reference, scenario, target skill, content version.
+  TrainingSession: owner, mode, progress and timestamps.
+  TrainingAttempt: owner/session/exercise, aid level, language, result, timestamps.
+  TrainingReviewState: owner/phrase, interval state, due time, version.
+  TrainingPattern: owner, stable pattern key, intent, feedback type, status.
+  TrainingEvidence: owner, source type, opaque source/session/segment identity,
+    occurrence time, attribution/quality status, pattern association.
+  TrainingContextSnapshot: owner, version, covered window, coverage status,
+    eligible pattern/exercise references, generation and expiry times.
+  TrainingIngestionRun: owner, producer/run identity, cursor, status and error code.
+  TrainingContextConsent: owner, permitted sources/destination, retention and
+    consent version; independent controls for collection, persistence and delivery.
+  Evidence metadata may itself be sensitive. Apply the same source policy and
+  retention controls; do not assume identifiers or timestamps are harmless.
+
+Privacy defaults:
+  No application-side persistent audio storage.
+  Explain that audio is processed by the configured cloud service; this is not
+  an assertion of zero provider retention. Verify service policy separately.
+  Persist selected learning phrases only after an explicit Save action.
+  Full attempt transcripts are opt-in, with clear retention and deletion controls.
+  Keep content-free review metadata separately where possible.
+  Do not persist raw content through localStorage, logs, traces or error bodies.
+  User-scoped reads/writes/deletes are mandatory; test cross-user isolation.
+
+5. IMPLEMENTATION STAGES AND VERIFIABLE OUTCOMES
+
+STAGE 0 - Establish a reproducible baseline and verification harness
+Dependencies: None.
+
+Work:
+  Inspect current source, working-tree diff, CI and available test commands.
+  Run the existing .NET build; document pre-existing failures separately.
+  If no test harness exists, add a minimal .NET test project necessary to test
+  Training state, scheduling and ownership. Reuse the repository's runner if one
+  has been introduced. Avoid adding a frontend build tool just for these features.
+  Create synthetic fixtures and a mock speech/coaching adapter.
+  Document how to exercise browser behaviour and approved live-model smoke tests.
+
+Verifiable outcome:
+  A future agent can run repeatable checks without live credentials and distinguish
+  application failures from missing Azure/model configuration.
+
+Exit criteria:
+  [ ] Build outcome recorded for website\chatui\chatui.csproj.
+  [ ] One success and one failure fixture run through the test harness.
+  [ ] Free Practice English, Russian, start/stop and navigation baseline recorded.
+  [ ] Existing dirty files preserved; no deployment or membership changes.
+
+STAGE 1 - Reliable exercise transport and state
+Dependencies: Stage 0.
+
+Work:
+  Introduce explicit attempt start, finish and cancel controls.
+  Add correlation IDs, bounded message sizes and audio buffering limits.
+  Route late transcript/model events to their original attempts.
+  Add an exercise policy that does not create a response at every VAD pause.
+  Finalise input/transcription before evaluating a completed answer.
+  Cancel pending responses and queued playback on cancel, navigation or restart.
+  Implement bounded reconnect behaviour; show an interrupted attempt rather than
+  pretending a partially received answer is complete.
+
+Verifiable outcome:
+  A learner can give an uninterrupted answer, finish it deliberately and receive
+  feedback associated with exactly that attempt.
+
+Exit criteria:
+  [ ] A two-second pause in Guided mode does not trigger an unsolicited answer.
+  [ ] Free Practice retains its existing automatic response policy.
+  [ ] Out-of-order A/B transcript and response events never mix the two attempts.
+  [ ] Cancelled or disconnected attempts cannot later become completed.
+  [ ] Navigation stops capture and queued playback; restart has no stale audio.
+  [ ] Invalid transitions and oversized controls produce explicit bounded errors.
+
+STAGE 2 - Guided Practice: natural option and independent retry
+Dependencies: Stage 1.
+
+Work:
+  Add Free Practice / Guided Practice selection.
+  Allow review/edit of recognised text before coaching where ASR is wrong.
+  Return one natural alternative and at most two actionable suggestions.
+  Add Listen, Try again, Reveal hint and Reveal answer controls.
+  Hide both text and model audio until requested during a retry.
+  Include customer/internal register guidance and natural contractions.
+  Distinguish translation, correction, conversational alternative and acceptable
+  original wording. Never force an unnecessary rewrite.
+
+Verifiable outcome:
+  The user completes an initial thought, sees/hears useful coaching and then makes
+  an independent English retry without being shown the answer first.
+
+Exit criteria:
+  [ ] Russian initial input translates naturally but is not marked English recall.
+  [ ] Correct but formal English can receive a labelled conversational alternative.
+  [ ] A semantically valid answer different from the reference is accepted.
+  [ ] Meaning changes in numbers, negation, uncertainty or promises are flagged.
+  [ ] Editing an ASR error does not masquerade as improved spoken performance.
+  [ ] Hint/reveal use is retained even if the learner hides the answer afterwards.
+  [ ] Malformed evaluation or unavailable service shows retryable failure, not pass.
+  [ ] User content is not executed as model/system instructions or rendered as HTML.
+
+STAGE 3 - Personal phrase library with explicit persistence
+Dependencies: Stage 2.
+
+Work:
+  Add EF Core entities, migration and user-scoped phrase APIs.
+  Save construction, communicative intent, register and natural examples.
+  Make saving the original wording optional and explicit.
+  Support edit, archive and deletion with documented effects on linked attempts.
+  Persist review metadata without requiring retention of all source speech.
+
+Verifiable outcome:
+  A selected phrase survives a server restart, is visible only to its owner and
+  can be permanently deleted through the application.
+
+Exit criteria:
+  [ ] Save/edit/list/archive/delete work against a development database.
+  [ ] Another signed-in user cannot read, modify or delete a guessed phrase ID.
+  [ ] TrainingAccess is enforced on every new API.
+  [ ] Save disabled/default unsaved attempts leave no durable original transcript.
+  [ ] Deletion removes retained source text and invalidates relevant cached content.
+  [ ] Migration applies to an existing Users-only database without losing users.
+  [ ] No raw phrase/attempt/audio content appears in application telemetry.
+
+STAGE 4 - Active recall and deterministic spaced review
+Dependencies: Stage 3.
+
+Work:
+  Present a situation without the model answer; collect English response first.
+  Add outcomes: independent, helped, notYet and notAssessable.
+  Distinguish the model's language assessment from server-recorded aid usage.
+  Start with configurable review intervals of 1, 3, 7 and 14 local calendar days.
+  Treat these as a practical initial policy, not a scientifically optimal schedule.
+  Independent recall advances; helped/notYet schedules sooner; notAssessable leaves
+  the review unchanged. Define the exact transition table before implementation.
+  Use the user's configured time zone, store UTC instants and handle DST explicitly.
+  Add idempotency and concurrency checks to review completion.
+
+Verifiable outcome:
+  The learner receives due phrases and each completed review updates the schedule
+  once according to a transparent policy.
+
+Exit criteria:
+  [ ] Fixed-clock tests cover every review outcome and interval transition.
+  [ ] Revealed/hinted answers cannot advance as independent recall.
+  [ ] Russian-only responses cannot advance as independent English recall.
+  [ ] ASR failure produces notAssessable without penalising the learner.
+  [ ] Duplicate submission and concurrent tabs do not advance the schedule twice.
+  [ ] Europe/London spring/autumn DST and midnight-boundary cases have tests.
+  [ ] Due reviews survive restart and are isolated by user.
+
+STAGE 5 - Daily Workout and transfer to different situations
+Dependencies: Stage 4.
+
+Work:
+  Build a suggested 10-15 minute session from due reviews and 1-3 new phrases.
+  Sequence Recall -> Learn -> Retry -> Transfer -> Finish.
+  Transfer uses the same construction in a genuinely different situation.
+  Store authored scenario variants and content versions; do not regenerate every
+  exercise on every screen load.
+  Include a small reviewed synthetic seed set before adding automatic generation.
+  Generation must produce meaningful, diverse examples, not noun-swapped templates.
+  Include situation labels and identify generated examples as practice, not quotes.
+  Persist resumable workout progress without retaining unapproved raw speech.
+
+Verifiable outcome:
+  One button starts a coherent session that includes independent recall and an
+  unseen-context task, with no false claims about upcoming calendar meetings.
+
+Exit criteria:
+  [ ] Empty library, all-due, nothing-due and interrupted-session flows work.
+  [ ] Completion requires actual attempts; opening a card does not count.
+  [ ] Transfer scenario differs in situation/purpose, not merely technical nouns.
+  [ ] Returning users resume without duplicate completed reviews.
+  [ ] Example sets are reviewed for naturalness, meaning and context diversity.
+  [ ] Ten-example sets span at least six situations; five-example sets span four.
+  [ ] Estimated workout duration is labelled as an estimate, not a forced promise.
+
+STAGE 5A - Automatically learn from current in-app practice
+Dependencies: Stage 5.
+
+Work:
+  Offer "Personalise training from my attempts" with a preview of stored data.
+  With opt-in enabled, process completed learner attempts into candidate patterns.
+  Use English original speech for English mistakes. A Russian original can supply
+  communicative intent or a phrase to practise, but is not an English error.
+  Exclude coach speech, model examples, ASR uncertainty, incomplete attempts and
+  user-rejected transcripts. Keep independent performance separate from prompted
+  retries so the same mistake in one exercise is not inflated into recurrence.
+  Add TrainingContextBuilder and a durable processing queue/outbox. Use the
+  existing database and an in-process worker initially, with restart-safe claims,
+  bounded retries, dead-letter status and per-user concurrency control.
+  Process each accepted attempt once for a given analysis version.
+  Classify correction, conversationalAlternative and alreadyNatural separately.
+  Assign a stable pattern key by construction + intent + register, not wording
+  alone. Preserve individual evidence events even when their pattern is shared.
+  Mark a pattern recurring only with at least two independent spoken occurrences;
+  distinguish one-off candidates and uncertain findings. Do not turn model
+  confidence into verified evidence.
+  Generate varied scenario packs under the Stage 5 quality gate, then atomically
+  publish a versioned context snapshot. Invalid content is not published.
+  Show why a pattern was selected, last-seen date and an option to dismiss,
+  correct or disable it. Do not require a manual Save for every phrase once this
+  separately explained automatic personalisation setting is enabled.
+
+Verifiable outcome:
+  A qualifying English attempt automatically produces a traceable practice
+  candidate available to a subsequent workout without manual phrase entry.
+
+Exit criteria:
+  [ ] With opt-in off, attempts create no persistent evidence or automatic cards.
+  [ ] An eligible synthetic attempt appears in context within two minutes while
+      the app and worker are running; after restart pending work resumes.
+  [ ] Ten retries of one exercise do not count as ten independent occurrences.
+  [ ] A second independent occurrence can mark recurrence with both references.
+  [ ] Russian input, uncertain ASR and coach output never create English-error
+      evidence. Formal but correct wording becomes a conversational alternative.
+  [ ] Replaying an ingestion event does not duplicate evidence, cards or progress.
+  [ ] Generated examples are labelled synthetic and cannot become source evidence.
+  [ ] A user dismissal persists across refresh and suppresses that pattern until
+      explicitly restored; do not silently override it with new model output.
+  [ ] Worker failure is visible and retryable; no partial context is published.
+  [ ] Cross-user worker claims, snapshots and candidate reads are rejected.
+
+STAGE 5B - Daily context from permitted recent meeting speech
+Dependencies: Stage 5A. May run before Stages 6-9.
+
+Work:
+  KEEP THE OFFLINE PDF REPORT. It remains a separate user-facing workflow with
+  its existing schedule and delivery. Do not replace it with JSON or make either
+  workflow depend on successful execution of the other.
+  Implement a separate versioned JSON training-context producer AFTER its own
+  verified speaker extraction and coverage audit. Do not parse the PDF, mine
+  Sent Items, or scrape another person's speech. Common validated extraction code
+  can be reused, but each workflow has its own run identity and failure status.
+  Existing automation: Daily Business English Fluency Report (r40ao159mtsuclbk).
+  Separate automation: Daily Training Context JSON (j6sveiimmtvddvad), created
+  2026-09-10, disabled pending approved destination and integration configuration.
+  Proposed initial producer schedule: daily 07:30 Europe/London; no email or
+  Teams delivery. Confirm scheduler time-zone semantics before enabling it.
+  The report's existing email approval is not approval to export work content
+  into this personal MVP. Before enabling the connector, verify source usage
+  rights, the destination, authentication and applicable classification controls.
+  Obtain explicit scope/retention approval in the application's connector setup.
+  If those checks fail, show blocked status and keep in-app training available.
+  Anonymisation or removal of names alone does not authorise declassification.
+
+  Source producer:
+  - Run independently daily, including weekends, using the previous 14
+    complete local calendar days and DST-aware boundaries.
+  - Recheck all in-window occurrences, recording sessions and source pages for
+    delayed transcripts. A discovery cursor must not skip previously missing
+    sources; deduplicate ingestion, not source discovery.
+  - Preserve source attribution and coverage gaps. Only verified user speech can
+    support a personalised mistake. Partial coverage stays explicitly partial.
+  - Emit only policy-permitted learning content: construction, intent, natural
+    alternatives and hypothetical scenario variants. Retain source quotations
+    only where explicitly allowed; otherwise keep them in the source boundary.
+  - Do not send private customer names, commercial details, meeting titles,
+    audio or full transcripts merely to explain a language construction.
+  - If no permissible export representation exists, do not export that finding.
+
+  Versioned pack contract:
+    schemaVersion, producerId, producerRunId, generatedAt, userBinding,
+    windowStart/windowEnd/timeZone, coverageStatus, sourceCompleteness,
+    policy/consent version, evidenceReferences, patterns and scenarioVariants.
+    Include whether each finding is new evidence, repeated evidence, a one-off
+    observation or a conversational alternative. Imported labels are validated,
+    not trusted as security decisions or executable instructions.
+
+  Delivery:
+  - Producer publishes to an approved protected JSON feed/store. The application
+    automatically PULLS it; manual import is a recovery/tooling path, not the
+    normal training experience. Choose an authenticated API or protected store
+    connector after verifying available permissions; neither is configured yet.
+  - Suggested pull triggers: when opening Training, with a freshness throttle,
+    plus a configurable periodic server-side refresh (initially every six hours).
+    The application reads the published pack; it does not rescan meetings.
+    Lack of background worker uptime must not prevent an on-open refresh.
+  - Use a configured allowlisted destination, never arbitrary client URLs.
+    Resolve access using supported least-privilege server authentication; never
+    expose producer/storage credentials or full source payloads to the browser.
+  - Use ETag/version checks and conditional reads. Download/validate a changed
+    immutable version before atomically switching the active snapshot.
+    A 304 response must not change the producer's generatedAt/lastSuccessAt.
+  - Avoid overlapping pulls with per-owner leases; use bounded exponential
+    backoff, jitter, timeouts and a visible status. Rate-limit manual refresh.
+  - Resolve the authorised user from verified identity/producer registration,
+    never a request-body userId alone. Use least-privilege credentials, not
+    embedded secrets, public links, session-cache tokens or a different account.
+  - Apply payload limits, schema validation, ownership checks, replay protection
+    and an idempotency key based on producer/run identity.
+  - Report accepted/rejected counts and ingestion status without echoing content.
+  - Store an explicit incomplete/stale status on failed refresh; never silently
+    present yesterday's snapshot as today's successful analysis.
+
+  Context selection:
+  - Prioritise recent independent evidence, recurrence, business usefulness,
+    difficulty recalling the phrase and the user's current learning load.
+  - Use a deterministic, documented ranking policy rather than an unexplained
+    model score. Expose the main selection reasons to the learner.
+  - Suggested initial workout mix: three due-review items, one recent pattern and
+    one transfer task. These are configurable defaults, not research thresholds.
+  - Cap new patterns at the Stage 5 limit. A new discovery must not erase due
+    reviews, reset learned phrases, or flood the next workout.
+  - Merge overlapping daily windows by source/session/segment identity. Replicated
+    recording/transcript artifacts require time alignment before deduplication.
+    Identical text spoken on separate occasions remains separate evidence.
+  - Treat new examples for an existing pattern as content updates, not evidence
+    of a new mistake. A day without new verified speech may still offer practice.
+  - Keep older learned phrases in spaced review after they leave the 14-day
+    discovery window; do not claim recurrence disappeared or learning succeeded.
+  - If a recent pattern was practised successfully, require later independent
+    recall/transfer evidence before downgrading its training priority.
+
+  Proposed integration surfaces:
+    POST /api/training/context/import
+    GET  /api/training/context/status
+    GET  /api/training/context/current
+    POST /api/training/context/refresh
+    POST /api/training/patterns/{id}/dismiss
+    Connector settings, disable and delete actions.
+  Exact routes may follow repository conventions; all need TrainingAccess and
+  owner checks, plus explicit producer authorisation for import.
+
+Verifiable outcome:
+  An independent approved JSON producer turns recent verified speaking patterns
+  into a protected pack; the application automatically pulls it into subsequent
+  workouts without manual upload. The offline PDF workflow remains intact.
+
+Exit criteria:
+  [ ] End-to-end synthetic test: a new allowed meeting-speech finding is accepted,
+      creates one candidate, and is selected in a subsequent workout.
+  [ ] Reprocessing overlapping daily windows does not multiply the same evidence.
+  [ ] Repeated wording from different sessions is retained as separate evidence.
+  [ ] A transcript published one day late is discovered on the next window sweep.
+  [ ] A missing source/page prevents a complete-coverage claim.
+  [ ] Source replacement/retraction invalidates affected findings and triggers
+      re-evaluation without deleting unrelated learner progress.
+  [ ] No new speech is reported accurately; fresh practice scenarios do not count
+      as new evidence or imply new errors.
+  [ ] Expired source rights, unknown classification, unapproved destination and
+      withdrawn consent block ingestion rather than invoking another route.
+  [ ] Midnight and both London DST transitions have fixed-clock window tests.
+  [ ] If a run is missed, the next run reports its actual window and missed-run
+      status; it does not fabricate a successful backfill.
+  [ ] Invalid schema, replay, wrong user and unsupported version are rejected.
+  [ ] Failed refresh leaves the last approved context explicitly stale with its
+      original date; it does not reset due reviews.
+  [ ] Disabling the connector stops future ingestion; deleting imported evidence
+      also removes dependent source text and invalidates affected snapshots.
+  [ ] Core training remains usable when the external connector is unavailable.
+  [ ] A synthetic published version is picked up on Training entry and by the
+      periodic worker without a manual import, and exercises appear next workout.
+  [ ] Unchanged ETag/version causes no duplicate cards or review-state reset.
+  [ ] Concurrent on-open/periodic pulls activate exactly one consistent snapshot.
+  [ ] Invalid/truncated JSON, 401/403, timeout and unknown schema retain the previous
+      snapshot with explicit stale/blocked status, never a false successful refresh.
+  [ ] JSON producer failure does not prevent PDF generation/delivery, and PDF
+      failure does not prevent an independently approved JSON publication.
+  [ ] Neither JSON producer nor consumer sends emails or Teams messages.
+  [ ] New context does not change the prompt/target of an in-progress attempt;
+      that attempt retains its original content version.
+  [ ] The live connector is not called complete until tested with a permitted
+      account/destination; synthetic success alone is insufficient.
+
+CORE MVP RELEASE GATE
+Stages 0-5 are the first useful release. Stage 5A is the next personalisation
+increment; Stage 5B adds the policy-approved daily meeting-context connector.
+Do not require later modes or external work-data access to ship core training.
+Release behind an opt-in capability flag, initially off for existing users.
+The user must be able to save a phrase, retrieve it unaided later and apply it in
+a new situation. Existing translation/chat/meeting experiences remain unchanged.
+
+STAGE 6 - Explain It Again: 4-3-2 task repetition
+Dependencies: Stage 5.
+
+Work:
+  Add one familiar topic and optional cue words for rounds of 4, 3 and 2 minutes.
+  Keep the same topic across all rounds; reference text stays hidden while speaking.
+  Provide short feedback between rounds, never spoken interruption during a round.
+  Allow early finish and clear pause/cancel behaviour.
+  Keep round and attempt lineage. Explain that clarity matters more than speed.
+
+Verifiable outcome:
+  Three timed explanations run sequentially with controlled feedback between them.
+
+Exit criteria:
+  [ ] Round durations and transitions are tested with a fake clock.
+  [ ] Long pauses do not trigger coach audio during a round.
+  [ ] Timer uses elapsed time correctly after a background-tab suspension.
+  [ ] Cancel/reconnect never creates a phantom completed round.
+  [ ] Feedback does not invent missing content or reward faster but unclear speech.
+  [ ] Live microphone smoke test completes all rounds without overlapping audio.
+
+STAGE 7 - Meeting Role-play
+Dependencies: Stage 5 and stable Stage 1 transport.
+
+Work:
+  Add bounded dialogues for clarification, budget, disagreement, architecture
+  trade-offs and closing a meeting.
+  Ask one question at a time; wait for the learner to finish.
+  Default to a short configurable turn limit; provide feedback after the dialogue.
+  Assess meaning, clarity, naturalness and register separately.
+  Supply server-controlled scenario boundaries; do not invent actual commitments.
+
+Verifiable outcome:
+  The learner completes an unscripted short exchange and receives feedback grounded
+  in their actual responses, including useful conversational alternatives.
+
+Exit criteria:
+  [ ] The coach asks one question per turn and respects the turn limit.
+  [ ] Alternative correct answers and polite disagreement are accepted.
+  [ ] The coach does not translate every reply instead of continuing the dialogue.
+  [ ] Final feedback cites the learner's own attempt text, never the coach's words.
+  [ ] A fluent answer that changes a requirement or promise is not rated successful
+      on meaning preservation.
+  [ ] Stop/cancel prevents further model turns and charges from continuing requests.
+
+STAGE 8 - Listen, repeat, then retrieve
+Dependencies: Stages 2 and 5.
+
+Work:
+  Add replay of a short synthetic model phrase, optional phrase-group markers and
+  an independent response after hiding the sample.
+  Reuse playback infrastructure; distinguish listening from learner microphone input.
+  Keep personal audio in memory only for optional immediate playback.
+  Do not introduce an accent/native-likeness score.
+
+Verifiable outcome:
+  The learner can hear and imitate an example, then independently express its intent.
+
+Exit criteria:
+  [ ] Model audio never counts as a learner attempt or enters the review result.
+  [ ] Repeat-after-model is labelled assisted, not independent recall.
+  [ ] Replay stops immediately when cancelled or leaving Training.
+  [ ] Synthetic audio is labelled; no unsupported claim about speaker origin.
+  [ ] Text-only recognition is not presented as pronunciation/intonation assessment.
+
+STAGE 9 - Honest progress reporting and optional exercise import
+Dependencies: Stages 5-8 for their respective metrics.
+
+Work:
+  Show independent recall, aided attempts, due reviews and new-situation performance.
+  Separate retry gains from delayed retention and transfer.
+  Use explicit denominators and minimum evidence rules; no universal fluency score.
+  Audio timing, if added, must distinguish speaking time, silence, playback and
+  network delay. Do not infer pause quality from transcript punctuation.
+  Optionally import a versioned JSON exercise pack after preview and user approval.
+  Import selected permitted phrases, not a full private meeting transcript or PDF.
+  Validate ownership, size, schema, provenance labels and duplicates.
+  Imported content is data, never executable instructions.
+
+Verifiable outcome:
+  The dashboard reports only observed learning events and a user can safely import
+  an approved exercise pack without broadening source-data access.
+
+Exit criteria:
+  [ ] Dashboard totals reconcile exactly with synthetic attempt records.
+  [ ] Missing, assisted and notAssessable attempts have distinct treatment.
+  [ ] Same-task improvements are not labelled general conversational improvement.
+  [ ] Imported practice examples cannot become authenticated transcript quotations.
+  [ ] Invalid/oversized packs fail explicitly; duplicate imports are idempotent.
+  [ ] User can preview, decline and delete imported learning content.
+  [ ] Manual import does not bypass the consent/policy gates of Stage 5B or add
+      background Microsoft 365 collection outside the approved connector.
+
+6. VERIFICATION AND HANDOFF
+
+For each stage:
+  - Run the smallest relevant existing automated checks and the .NET build.
+  - Use synthetic fixtures for model/state evaluation.
+  - Exercise changed browser flows on desktop and a representative mobile browser.
+  - Include microphone denial, lost connection, delayed transcription, model failure,
+    double-click, navigation and accessibility/keyboard paths where relevant.
+  - Show an explicit outcome for each exit criterion: pass, fail or blocked.
+  - Keep real speech out of screenshots, logs and committed test evidence.
+
+Coaching quality fixture categories:
+  Russian thought -> natural English; acceptable English unchanged; formal English
+  -> conversational alternative; alternate good answer; negation; numbers; uncertain
+  commitment; unknown terminology; ASR error; mixed language; transcript injection.
+Evaluate fixtures against a rubric, not one mandatory wording.
+
+Final agent handoff must include:
+  changed files, data migration notes, capability/configuration prerequisites,
+  automated and live-check outcomes, privacy/retention behaviour, feature-flag
+  behaviour, known limitations and the next unimplemented stage.
+  For Stages 5A-5B, include the ingestion contract, ranking/recurrence policy,
+  last-success/staleness semantics, duplicate/retraction behaviour and explicit
+  evidence of producer/user isolation. Do not include private source payloads.
+
+7. EVIDENCE AND LIMITS
+
+Active retrieval and distributed practice have broad learning evidence:
+  Dunlosky et al. (2013), Improving Students' Learning With Effective Learning
+  Techniques:
+  https://www.psychologicalscience.org/publications/journals/pspi/learning-techniques.html
+
+Repeated speaking tasks have direct, but bounded, second-language fluency evidence:
+  de Jong & Perfetti (2011), Fluency Training in the ESL Classroom:
+  An Experimental Study of Fluency Development and Proceduralization.
+  https://doi.org/10.1111/j.1467-9922.2010.00620.x
+
+The 1-3-7-14 schedule, workout length, scenario-diversity thresholds and role-play
+design are initial product choices, not experimentally established optimal values.
+Listening/shadowing is supplementary. The application must not promise native
+speech, a fixed improvement rate, or mastery based on a single successful answer.

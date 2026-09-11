@@ -13,14 +13,14 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('The name of the workload\'s existing Log Analytics workspace.')
 @minLength(4)
 param logAnalyticsWorkspaceName string
 
-var speechName = 'speech${baseName}'
+var speechName = contains(baseName, '-') ? 'speech-${baseName}' : 'speech${baseName}'
 
 // ---- Existing resources ----
 
@@ -44,7 +44,7 @@ resource speech 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   properties: {
     customSubDomainName: speechName
     disableLocalAuth: true
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
   }
 }
 

@@ -13,7 +13,7 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('The name of the workload\'s existing Log Analytics workspace.')
@@ -44,7 +44,7 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
   }
   properties: {
     disableLocalAuth: true
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
     liveTraceConfiguration: {
       enabled: 'true'
       categories: [
@@ -61,12 +61,7 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
     networkACLs: {
       defaultAction: 'Allow'
       publicNetwork: {
-        allow: [
-          'ServerConnection'
-          'ClientConnection'
-          'RESTAPI'
-          'Trace'
-        ]
+        deny: ['ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace']
       }
     }
   }

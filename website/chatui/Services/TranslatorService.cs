@@ -19,7 +19,7 @@ namespace chatui.Services;
 /// </summary>
 public sealed class TranslatorService
 {
-    private static readonly string[] TokenScopes = ["https://api.cognitive.microsofttranslator.com/.default"];
+    private static readonly string[] TokenScopes = ["https://cognitiveservices.azure.com/.default"];
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
@@ -31,7 +31,11 @@ public sealed class TranslatorService
         _credential = credential;
         _options = options.Value;
         _http = httpClient;
-        _http.BaseAddress = new Uri(_options.Endpoint.TrimEnd('/') + "/");
+        var endpoint = new Uri(_options.Endpoint.TrimEnd('/') + "/");
+        _http.BaseAddress = endpoint.AbsolutePath == "/"
+            && endpoint.Host.EndsWith(".cognitiveservices.azure.com", StringComparison.OrdinalIgnoreCase)
+            ? new Uri(endpoint, "translator/text/v3.0/")
+            : endpoint;
     }
 
     public async Task<TranslationResult> TranslateAsync(

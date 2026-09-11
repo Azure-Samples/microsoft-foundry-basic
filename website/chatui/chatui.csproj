@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="wwwroot\" />
+    <InternalsVisibleTo Include="chatui.Tests" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI.Foundry" Version="1.0.0-*" />
@@ -25,6 +26,6 @@
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.14.0" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />
-    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.43.0" />
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.51.2" />
   </ItemGroup>
 </Project>

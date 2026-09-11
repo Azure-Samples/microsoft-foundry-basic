@@ -1,12 +1,11 @@
 using System.Diagnostics;
-using System.Net.Http.Headers;
-using System.Text;
 using Azure.Core;
 using chatui.Auth;
 using chatui.Configuration;
 using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.CognitiveServices.Speech;
 
 namespace chatui.Controllers;
 
@@ -22,7 +21,6 @@ public class SpeechController(
     IUserContext userContext,
     TokenCredential credential,
     IOptions<SpeechOptions> speechOptions,
-    IHttpClientFactory httpFactory,
     TranslatorTelemetry telemetry,
     ILogger<SpeechController> logger) : ControllerBase
 {
@@ -36,14 +34,7 @@ public class SpeechController(
         // when it's about to talk to the Speech SDK from a signed-in session.
         _ = await userContext.GetCurrentAsync(ct).ConfigureAwait(false);
 
-        var accessToken = await credential
-            .GetTokenAsync(new TokenRequestContext(CognitiveServicesScopes), ct)
-            .ConfigureAwait(false);
-
-        var opts = speechOptions.Value;
-        var wrapped = $"aad#{opts.ResourceId}#{accessToken.Token}";
-
-        return Ok(new SpeechTokenResponse(wrapped, opts.Region, accessToken.ExpiresOn));
+        return StatusCode(StatusCodes.Status410Gone);
     }
 
     /// <summary>
@@ -83,49 +74,24 @@ public class SpeechController(
 
         var opts = speechOptions.Value;
 
-        // Exchange the AAD access token for a short-lived Speech STS token.
-        // The STS endpoint must be the account's custom subdomain (not the
-        // regional endpoint) for AAD authentication to work.
-        var http = httpFactory.CreateClient();
-        var accountBase = opts.Endpoint.TrimEnd('/');
-        using var issueReq = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{accountBase}/sts/v1.0/issueToken");
-        issueReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Token);
-        using var issueResp = await http.SendAsync(issueReq, ct).ConfigureAwait(false);
-        if (!issueResp.IsSuccessStatusCode)
-        {
-            var err = await issueResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            logger.LogWarning("Speech STS issueToken failed {Status}: {Body}", issueResp.StatusCode, err);
-            return StatusCode((int)issueResp.StatusCode, "issueToken: " + err);
-        }
-        var speechJwt = (await issueResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false)).Trim();
-
         var ssml = $"""
             <speak version='1.0' xml:lang='{Escape(lang)}'>
               <voice name='{Escape(voice)}'>{Escape(text)}</voice>
             </speak>
             """;
 
-        var url = $"https://{opts.Region}.tts.speech.microsoft.com/cognitiveservices/v1";
-        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        var config = SpeechConfig.FromEndpoint(new UriBuilder(opts.Endpoint) { Scheme = "wss", Port = -1 }.Uri);
+        config.AuthorizationToken = $"aad#{opts.ResourceId}#{accessToken.Token}";
+        config.SetSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3);
+        using var synthesizer = new SpeechSynthesizer(config, null);
+        using var result = await synthesizer.SpeakSsmlAsync(ssml).WaitAsync(ct).ConfigureAwait(false);
+        if (result.Reason != ResultReason.SynthesizingAudioCompleted)
         {
-            Content = new StringContent(ssml, Encoding.UTF8, "application/ssml+xml"),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", speechJwt);
-        req.Headers.Add("X-Microsoft-OutputFormat", "audio-24khz-48kbitrate-mono-mp3");
-        req.Headers.Add("User-Agent", "ai-translator");
-
-        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            logger.LogWarning("TTS synth failed {Status}: {Body}", resp.StatusCode, err);
-            return StatusCode((int)resp.StatusCode, err);
+            logger.LogWarning("Private Speech synthesis failed ({Reason})", result.Reason);
+            return StatusCode(StatusCodes.Status502BadGateway, "Speech synthesis unavailable.");
         }
 
-        var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var bytes = result.AudioData;
         sw.Stop();
 
         var tags = new TagList

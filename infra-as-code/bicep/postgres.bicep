@@ -15,7 +15,7 @@ param location string = resourceGroup().location
 
 @description('This is the base name for each Azure resource name (6-8 chars)')
 @minLength(6)
-@maxLength(8)
+@maxLength(20)
 param baseName string
 
 @description('The name of the workload\'s existing Log Analytics workspace.')
@@ -40,6 +40,9 @@ param appServicePrincipalClientId string
 @description('Display name to persist as the login name for the deployer Entra admin entry.')
 @minLength(1)
 param deployerPrincipalDisplayName string
+
+@description('Legacy deployments only. New deployments grant the application a database-scoped role after migrations.')
+param enableAppServerAdmin bool = false
 
 var pgServerName = 'pg-${baseName}'
 var databaseName = 'translator'
@@ -81,7 +84,7 @@ resource pgServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
       tenantId: subscription().tenantId
     }
     network: {
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: 'Disabled'
     }
   }
 }
@@ -106,16 +109,6 @@ resource azureExtensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/config
   }
 }
 
-@description('Firewall rule permitting Azure services (App Service outbound IPs). Fine for MVP; production should switch to VNet integration + private endpoints.')
-resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
-  parent: pgServer
-  name: 'AllowAllAzureServicesAndResourcesWithinAzureIps'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
-  }
-}
-
 @description('Entra admin for the deploying human — needed to run migrations from a workstation.')
 resource deployerAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
   parent: pgServer
@@ -125,13 +118,10 @@ resource deployerAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators
     principalName: deployerPrincipalDisplayName
     tenantId: subscription().tenantId
   }
-  dependsOn: [
-    allowAzureServices
-  ]
 }
 
 @description('Entra admin for the App Service managed identity. Production hardening: replace this admin grant with a database-level role granted via `SELECT pgaadauth_create_principal(...)` after migrations.')
-resource appServiceAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
+resource appServiceAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = if (enableAppServerAdmin) {
   parent: pgServer
   name: appServicePrincipalId
   properties: {

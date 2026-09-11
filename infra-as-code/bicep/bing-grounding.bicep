@@ -1,8 +1,10 @@
 targetScope = 'resourceGroup'
 
+param accountName string = 'bing-ai-agent'
+
 #disable-next-line BCP081
 resource bingAccount 'Microsoft.Bing/accounts@2025-05-01-preview' = {
-  name: 'bing-ai-agent'
+  name: accountName
   location: 'global'
   kind: 'Bing.Grounding'
   sku: {

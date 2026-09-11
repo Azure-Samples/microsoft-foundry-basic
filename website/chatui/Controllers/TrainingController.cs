@@ -4,6 +4,7 @@ using System.Text.Json;
 using Azure.Core;
 using chatui.Auth;
 using chatui.Configuration;
+using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -25,12 +26,30 @@ public sealed class TrainingController(
     public async Task Live(CancellationToken cancellationToken)
     {
         var user = await userContext.GetCurrentAsync(cancellationToken).ConfigureAwait(false);
-        if (!TrainingAccess.IsMember(user))
+        if (!TrainingAccess.IsMember(user, chatOptions.Value.TrainingMemberObjectIds))
         {
             HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
             await HttpContext.Response.WriteAsJsonAsync(
                 new { error = "Training access is required." },
                 cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var mode = Request.Query["mode"].ToString();
+        var guided = mode == "guided";
+        if (mode.Length > 0 && mode != "free" && !guided)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+        if (guided && !chatOptions.Value.TrainingGuidedEnabled)
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+        if (guided && Request.Query["protocol"] != "guided.v1")
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
 
@@ -53,6 +72,12 @@ public sealed class TrainingController(
             token.Token,
             cancellationToken).ConfigureAwait(false);
 
+        if (guided)
+        {
+            await new GuidedTrainingSession().RunAsync(client, upstream, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         await SendJsonAsync(upstream, new
         {
             type = "session.update",
@@ -71,14 +96,7 @@ public sealed class TrainingController(
                     {
                         format = new { type = "audio/pcm", rate = 24000 },
                         transcription = new { model = "gpt-live-transcribe" },
-                        turn_detection = new
-                        {
-                            type = "server_vad",
-                            threshold = 0.5,
-                            prefix_padding_ms = 300,
-                            silence_duration_ms = 700,
-                            create_response = true,
-                        },
+                        turn_detection = (object?)null,
                     },
                     output = new
                     {
@@ -109,17 +127,38 @@ public sealed class TrainingController(
         }
     }
 
-    private static async Task PumpAudioAsync(
+    internal static async Task PumpAudioAsync(
         WebSocket client,
         WebSocket upstream,
         SemaphoreSlim sendGate,
         CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
+        var finished = false;
+        using var control = new MemoryStream();
         while (!cancellationToken.IsCancellationRequested && client.State == WebSocketState.Open)
         {
             var result = await client.ReceiveAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (result.MessageType == WebSocketMessageType.Close) return;
+            if (finished) continue;
+            if (result.MessageType == WebSocketMessageType.Text)
+            {
+                if (control.Length + result.Count > 1024) throw new InvalidDataException();
+                control.Write(buffer, 0, result.Count);
+                if (!result.EndOfMessage) continue;
+                using var document = JsonDocument.Parse(control.ToArray());
+                control.SetLength(0);
+                if (ReadString(document.RootElement, "type") != "recording.finish") continue;
+                finished = true;
+                await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await SendJsonAsync(upstream, new { type = "input_audio_buffer.commit" }, cancellationToken).ConfigureAwait(false);
+                    await SendJsonAsync(upstream, new { type = "response.create" }, cancellationToken).ConfigureAwait(false);
+                }
+                finally { sendGate.Release(); }
+                continue;
+            }
             if (result.MessageType != WebSocketMessageType.Binary || result.Count == 0) continue;
             await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -137,7 +176,7 @@ public sealed class TrainingController(
         }
     }
 
-    private async Task PumpEventsAsync(
+    internal async Task PumpEventsAsync(
         WebSocket upstream,
         WebSocket client,
         SemaphoreSlim sendGate,
@@ -206,6 +245,14 @@ public sealed class TrainingController(
                             cancellationToken).ConfigureAwait(false);
                     }
                     break;
+                case "response.done":
+                    var response = root.GetProperty("response");
+                    if (ReadString(response, "status") == "completed")
+                        await SendClientJsonAsync(client, sendGate, new { type = "response_done" }, cancellationToken).ConfigureAwait(false);
+                    else
+                        await SendClientJsonAsync(client, sendGate, new { type = "error", message = "The complete recording could not be translated. Please try again." }, cancellationToken).ConfigureAwait(false);
+                    break;
+                case "conversation.item.input_audio_transcription.failed":
                 case "error":
                     var error = root.TryGetProperty("error", out var errorNode)
                         ? ReadString(errorNode, "message")
