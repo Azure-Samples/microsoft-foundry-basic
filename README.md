@@ -73,6 +73,8 @@ Follow these instructions to deploy this example to your Azure subscription, try
 
   If you're executing this from WSL, be sure the Azure CLI is installed in WSL and is not using the version installed in Windows. `which az` should show `/usr/bin/az`.
 
+- [Docker](https://docs.docker.com/get-docker/) installed and running
+
 ### 1. :rocket: Deploy the infrastructure
 
 The following steps are required to deploy the infrastructure from the command line.
@@ -194,8 +196,18 @@ Workloads build chat functionality into an application. Those interfaces usually
 
 1. Deploy the ChatUI web app
 
+   First, package the ChatUI app using the devcontainer image (no local .NET install needed):
+
    ```bash
-   az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-url https://github.com/Azure-Samples/microsoft-foundry-basic/raw/refs/heads/main/website/chatui.zip
+   docker run --rm -v "$PWD":/work -w /work \
+     mcr.microsoft.com/devcontainers/dotnet:dev-10.0 \
+     bash -c "apt-get update && apt-get install -y zip && cd src/chatui && dotnet publish -c Release -o ./publish && cd ../.. && zip -r src/chatui.zip chatui/publish"
+   ```
+
+   Then deploy the package to Azure App Service:
+
+   ```bash
+   az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-path src/chatui.zip
    ```
 
 > Sometimes the prior command will fail with a `GatewayTimeout`. If you receive that error, you're safe to simply execute the command again.

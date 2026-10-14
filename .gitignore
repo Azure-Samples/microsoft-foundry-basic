@@ -398,4 +398,4 @@ FodyWeavers.xsd
 *.sln.iml
 
 # ChatUI deployment package (built on demand, see README)
-website/*.zip
+src/chatui/*.zip
