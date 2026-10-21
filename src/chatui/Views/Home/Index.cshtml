@@ -180,9 +180,11 @@
         const chatContainer = document.querySelector(".msger-chat");
         const messageInput = chatForm?.elements?.message;
 
-        // Empty until the first response: Foundry assigns the hosted-agent session
-        // id on the first turn and the app adopts it for subsequent turns.
-        let threadId = "";
+        // Serialized AgentSession round-tripped from the server each turn (null on turn 1).
+        let sessionState = localStorage.getItem("chatSession") ?? null;
+        if (sessionState) {
+            try { sessionState = JSON.parse(sessionState); } catch { sessionState = null; }
+        }
 
         addChatMessage(BOT_NAME, "left", "How can I help you today?");
 
@@ -206,11 +208,11 @@
         });
 
         async function sendPrompt(prompt) {
-            const url = threadId ? `/chat/responses/${threadId}` : "/chat/responses";
+            const url = "/chat/responses";
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(prompt)
+                body: JSON.stringify({ message: prompt, session: sessionState })
             });
 
             if (!response.ok) {
@@ -219,8 +221,9 @@
             }
 
             const result = await response.json();
-            if (result.id) {
-                threadId = result.id;
+            if (result.session) {
+                sessionState = result.session;
+                try { localStorage.setItem("chatSession", JSON.stringify(sessionState)); } catch { /* quota */ }
             }
 
             return result;

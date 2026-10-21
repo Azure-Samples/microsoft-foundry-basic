@@ -3,6 +3,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry;
 using chatui.Configuration;
 using System.Text;
+using System.Text.Json;
 
 namespace chatui.Controllers;
 
@@ -14,42 +15,39 @@ public class ChatController(
     FoundryAgentResolver agentResolver,
     ILogger<ChatController> logger) : ControllerBase
 {
-    // TODO: [security] Do not trust client to provide conversationId. Instead map current user to their active conversationId in your application's own state store.
-    // Without this security control in place, a user can inject messages into another user's conversation.
-    [HttpPost("{conversationId?}")]
-    public async Task<IActionResult> Responses([FromRoute] string? conversationId, [FromBody] string message)
+    public class Request
     {
-        if (string.IsNullOrWhiteSpace(message))
-            throw new ArgumentException("Message cannot be null, empty, or whitespace.", nameof(message));
+        public string Message { get; set; } = default!;
+
+        // Serialized AgentSession from the previous turn (null on the first turn).
+        public JsonElement? Session { get; set; }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Responses([FromBody] Request request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message))
+            throw new ArgumentException("Message cannot be null, empty, or whitespace.", nameof(request.Message));
 
         // Sanitize untrusted input before logging to prevent log forging via newline/control characters.
-        logger.LogDebug("Prompt received {Prompt}", SanitizeForLog(message));
+        logger.LogDebug("Prompt received: {Prompt}", SanitizeForLog(request.Message));
 
         FoundryAgent agent = agentResolver.GetAgent();
 
-        AgentSession session;
-        string? conversationIdResult;
-        if (string.IsNullOrEmpty(conversationId))
-        {
-            // First turn: create a server-side conversation through the platform's
-            // Conversations API. The platform stores message history under the
-            // returned id and binds a stable hosted-agent session to it.
-            var conversationSession = (ChatClientAgentSession)await agent.CreateConversationSessionAsync();
-            session = conversationSession;
-            conversationIdResult = conversationSession.ConversationId;
-        }
-        else
-        {
-            // Subsequent turns: resume the existing server-side conversation.
-            var innerAgent = agent.GetService<ChatClientAgent>()!;
-            session = await innerAgent.CreateSessionAsync(conversationId);
-            conversationIdResult = conversationId;
-        }
+        // Stateless server: the client round-trips the serialized session. Turn 1 has none,
+        // so create a fresh one; later turns restore the prior conversation state.
+        AgentSession session = request.Session is { } saved
+            ? await agent.DeserializeSessionAsync(saved)
+            : await agent.CreateSessionAsync();
 
-        var response = await agent.RunAsync(message, session);
+        var response = await agent.RunAsync(request.Message, session);
 
-        // Return the conversation id so the client carries it on subsequent turns.
-        return Ok(new { data = response.ToString(), id = conversationIdResult });
+        // Marshal the (now updated) session back to the client so the next turn can
+        // restore it. Serialized sessions carry conversation state and are sensitive —
+        // treat them like a credential on the wire.
+        JsonElement serialized = await agent.SerializeSessionAsync(session);
+
+        return Ok(new { data = response.ToString(), session = serialized });
     }
 
     private static string SanitizeForLog(string input)
