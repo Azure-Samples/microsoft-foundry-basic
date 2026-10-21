@@ -181,10 +181,8 @@
         const messageInput = chatForm?.elements?.message;
 
         // Serialized AgentSession round-tripped from the server each turn (null on turn 1).
-        let sessionState = localStorage.getItem("chatSession") ?? null;
-        if (sessionState) {
-            try { sessionState = JSON.parse(sessionState); } catch { sessionState = null; }
-        }
+        // Kept in memory only: a page reload starts a fresh conversation.
+        let sessionState = null;
 
         addChatMessage(BOT_NAME, "left", "How can I help you today?");
 
@@ -223,7 +221,6 @@
             const result = await response.json();
             if (result.session) {
                 sessionState = result.session;
-                try { localStorage.setItem("chatSession", JSON.stringify(sessionState)); } catch { /* quota */ }
             }
 
             return result;
