@@ -397,5 +397,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
-# ChatUI deployment package (built on demand, see README)
-src/chatui/*.zip
+# Deployment packages (built on demand, see README)
+src/chatui.zip
+src/agent.zip

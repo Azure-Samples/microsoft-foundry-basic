@@ -33,9 +33,9 @@ The following workflow corresponds to the previous diagram:
 
 ### Deploying a hosted agent into Foundry Agent Service
 
-A **hosted agent** is your own code packaged as a containerized application and deployed to Microsoft-managed infrastructure. Unlike prompt-based agents (defined entirely through prompts in the portal), hosted agents give you full control over the agent logic, tools, and orchestration while the platform handles scaling, session state, and lifecycle.
+A **hosted agent** is your own code packaged as a containerized application and deployed to Microsoft-managed infrastructure. Unlike prompt-based agents (defined entirely through configuration), hosted agents give you full control over the agent logic, tools, and orchestration while the platform handles scaling, session state, and lifecycle.
 
-The agent in this reference implementation uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint via the `Azure.AI.AgentServer.Responses` protocol. It includes hosted web search for grounding answers with real-time information.
+The agent in this reference implementation uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint via the `Responses` protocol. It includes hosted web search for grounding answers with real-time information.
 
 Agents can be deployed via the [Foundry SDK](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Projects), the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/), or Azure Developer CLI. The creation and invocation of agents are data plane operations.
 
@@ -45,7 +45,7 @@ Ideally agents should be source-controlled and a versioned asset. You then can d
 
 A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's hosted agent. The endpoint for the agent is exposed over internet through Foundry.
 
-Agent invocation at runtime uses a different API surface than agent lifecycle management. Hosted agents are invoked through their agent-specific endpoint (`.../agents/<agentName>/endpoint/protocols/openai`), which the application derives from the project endpoint and the registered agent name. Multi-turn continuity uses hosted-agent sessions: the platform assigns the session id on the first turn and the client pins subsequent turns to it. The active agent version is resolved by the endpoint's administrator-controlled version selector.
+Agent invocation at runtime uses a different API surface than agent lifecycle management. Hosted agents are invoked through their agent-specific endpoint (`{projectEndpoint}/agents/<agentName>/endpoint/protocols/openai`), which the application derives from the project endpoint and the registered agent name. Multi-turn continuity uses hosted-agent sessions: the platform assigns the session id on the first turn and the client pins subsequent turns to it. The active agent version is resolved by the endpoint's administrator-controlled version selector.
 
 ## Deployment guide
 
@@ -130,7 +130,7 @@ The following steps are required to deploy the infrastructure from the command l
 
 ### 2. Deploy a hosted agent in Foundry Agent Service
 
-To test this scenario, you'll deploy a **hosted agent** — your own code running as a containerized application on Microsoft-managed infrastructure. The agent uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint. It includes hosted web search for grounding answers with real-time information.
+To test this scenario, you'll deploy a **hosted agent**, your own code running as a containerized application on Microsoft-managed infrastructure. The agent uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint. It includes hosted web search for grounding answers with real-time information.
 
 The agent source code lives in [`src/agent/`](src/agent/) in this repository. You'll package it as a ZIP, upload it to Foundry Agent Service via the REST API, and poll until the version is active.
 
@@ -227,8 +227,6 @@ Here you'll test your hosted agent by invoking it directly from the Foundry port
 ### 4. Deploy the chat front-end web app
 
 Workloads build chat functionality into an application. Those interfaces usually call the agent's endpoint in Foundry Agent Service. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
-
-The web app's app settings (including the agent endpoint) are configured by the infrastructure deployment in step 1, so no additional configuration is needed here.
 
 1. Deploy the ChatUI web app
 
