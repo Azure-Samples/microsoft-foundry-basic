@@ -13,7 +13,7 @@ var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_N
 AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
     .AsAIAgent(
         model: deployment,
-        instructions: "You are a helpful assistant that grounds answers with web search.",
+        instructions: "You are a helpful Chatbot agent. You'll consult the Bing Search tool to answer questions. Always search the web for information before responding.",
         name: "baseline-chatbot-agent",
         tools: [new HostedWebSearchTool()]);
 
