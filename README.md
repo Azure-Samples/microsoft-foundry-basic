@@ -9,8 +9,8 @@ The reference implementation illustrates a basic example of a chat application. 
 The implementation covers the following scenarios:
 
 - [Setting up Microsoft Foundry to host agents](#setting-up-microsoft-foundry-to-host-agents)
-- [Deploying an agent into Foundry Agent Service](#deploying-an-agent-into-foundry-agent-service)
-- [Invoking the agent from .NET code hosted in an Azure Web App](#invoking-the-agent-from-net-code-hosted-in-an-azure-web-app)
+- [Deploying a hosted agent into Foundry Agent Service](#deploying-a-hosted-agent-into-foundry-agent-service)
+- [Invoking the hosted agent from .NET code hosted in an Azure Web App](#invoking-the-hosted-agent-from-net-code-hosted-in-an-azure-web-app)
 
 ### Setting up Microsoft Foundry to host agents
 
@@ -27,21 +27,25 @@ The following workflow corresponds to the previous diagram:
 1. An application user interacts with a web application that contains chat functionality. They issue an HTTPS request to the App Service default domain on azurewebsites.net. This domain automatically points to the App Service built-in public IP address. The Transport Layer Security connection is established from the client directly to App Service. Azure fully manages the certificate.
 1. The App Service feature called Easy Auth ensures that the user who accesses the website is authenticated via Microsoft Entra ID.
 1. The application code deployed to App Service handles the request and renders a chat UI for the application user. The chat UI code connects to APIs that are also hosted in that same App Service instance. The API code connects to an agent in Microsoft Foundry through the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework), which calls the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs under the hood.
-1. Foundry Agent Service connects to Azure AI Search to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
-1. Foundry Agent Service connects to an Azure OpenAI model that's deployed in Foundry and sends the prompt that includes the relevant grounding data and chat context.
+1. The hosted agent uses its built-in web search tool to fetch grounding data for the query. The grounding data is added to the prompt that's sent to the Azure OpenAI model in the next step.
+1. The hosted agent connects to an Azure OpenAI model that's deployed in Foundry and sends the prompt that includes the relevant grounding data and chat context.
 1. Application Insights logs information about the original request to App Service and the call agent interactions.
 
-### Deploying an agent into Foundry Agent Service
+### Deploying a hosted agent into Foundry Agent Service
 
-Agents can be created via the Foundry portal, [Foundry SDK](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Projects), or the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/). The creation and invocation of agents are a data plane operation.
+A **hosted agent** is your own code packaged as a containerized application and deployed to Microsoft-managed infrastructure. Unlike prompt-based agents (defined entirely through prompts in the portal), hosted agents give you full control over the agent logic, tools, and orchestration while the platform handles scaling, session state, and lifecycle.
 
-Ideally agents should be source-controlled and a versioned asset. You then can deploy agents in a coordinated way with the rest of your workload's code. In this deployment guide, you'll create an agent through the REST API to simulate a deployment pipeline which could have created the agent.
+The agent in this reference implementation uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint via the `Azure.AI.AgentServer.Responses` protocol. It includes hosted web search for grounding answers with real-time information.
 
-### Invoking the agent from .NET code hosted in an Azure Web App
+Agents can be deployed via the [Foundry SDK](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Projects), the [REST API](https://learn.microsoft.com/rest/api/aifoundry/aiagents/), or Azure Developer CLI. The creation and invocation of agents are data plane operations.
 
-A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's agent. The endpoint for the agent is exposed over internet through Foundry.
+Ideally agents should be source-controlled and a versioned asset. You then can deploy agents in a coordinated way with the rest of your workload's code. In this deployment guide, you'll deploy the agent through the REST API to simulate a deployment pipeline which could have created the agent.
 
-Agent invocation at runtime uses a different API surface than agent lifecycle management. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) uses exclusively the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs, identifying the agent by name and version directly in the request body.
+### Invoking the hosted agent from .NET code hosted in an Azure Web App
+
+A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's hosted agent. The endpoint for the agent is exposed over internet through Foundry.
+
+Agent invocation at runtime uses a different API surface than agent lifecycle management. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) uses exclusively the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs, identifying the agent by name and version directly in the request body. This works identically for hosted agents — the platform routes requests to the agent's container.
 
 ## Deployment guide
 
@@ -124,51 +128,126 @@ The following steps are required to deploy the infrastructure from the command l
      -p yourPrincipalId=$PRINCIPAL_ID
    ```
 
-### 2. Deploy an agent in the Foundry Agent Service
+### 2. Deploy a hosted agent in Foundry Agent Service
 
-To test this scenario, you'll be deploying a prompt-based AI agent. The agent uses a GPT model combined with a Bing search for grounding data. Deploying an AI agent requires data plane access to Microsoft Foundry. In this architecture, you will interact with the Foundry portal and its resources over the internet.
+To test this scenario, you'll deploy a **hosted agent** — your own code running as a containerized application on Microsoft-managed infrastructure. The agent uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider and exposes an OpenAI-compatible `/responses` endpoint. It includes hosted web search for grounding answers with real-time information.
 
-1. Open the Azure portal to your subscription.
+The agent source code lives in [`src/agent/`](src/agent/) in this repository. You'll package it as a ZIP, upload it to Foundry Agent Service via the REST API, and poll until the version is active.
 
-1. Navigate to the Foundry project named **projchat** in your resource group and open the Foundry portal by clicking the **Go to Foundry portal** button.
+#### 2a. Package the agent source code
 
-   This will take you directly into the 'Chat project'. Alternatively, you can find all your Foundry accounts and projects by going to <https://ai.azure.com> and you do not need to use the Azure portal to access them.
+Build and publish the agent using the devcontainer image (no local .NET install needed), then create a flat ZIP of the published output:
 
-1. In the upper-right corner, if not already enabled, toggle **New Foundry** to switch into the Microsoft Foundry (new) portal.
+```bash
+docker run --rm -v "$PWD":/work -w /work \
+  mcr.microsoft.com/devcontainers/dotnet:dev-10.0 \
+  bash -c "apt-get update && apt-get install -y zip && cd src/agent && dotnet publish -c Release -o ./publish && cd ../.. && rm -rf /tmp/agent-zip && mkdir -p /tmp/agent-zip && cp -r src/agent/publish/* /tmp/agent-zip/ && cd /tmp/agent-zip && zip -r /work/src/agent.zip ."
+```
 
-1. In the top-right corner, click **Build**. This opens by default the **Agents** blade in the side navigation, where you can view the available agents and create new ones.
+This produces `src/agent.zip` containing the published .NET binaries at the ZIP root (no wrapper folder).
 
-   The first time you access this section, the **Agents** list should be empty.
+#### 2b. Deploy the agent via the REST API
 
-1. Click the **New Agent** dropdown button and select **Build an agent**.
+The following commands upload the agent source code to Foundry Agent Service and create a new version. The platform builds the dependencies remotely (`remote_build`) and provisions a dedicated agent identity.
 
-1. Enter 'baseline-chatbot-agent' as the Agent name.
+```bash
+FOUNDRY_NAME="aif${BASE_NAME}"
+FOUNDRY_PROJECT_NAME="projchat"
+FOUNDRY_BASE_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}"
+API_VERSION="2025-11-15-preview"
+AGENT_NAME="baseline-chatbot-agent"
 
-1. Click **Create and open playground** button.
+# Compute the SHA-256 of the ZIP
+ZIP_SHA256=$(sha256sum src/agent.zip | awk '{print $1}')
 
-1. In the Playground panel, select the available deployment model named **agent-model**.
+# Build the metadata JSON (agent definition wrapped in a 'definition' key)
+DEFINITION='{
+  "definition": {
+    "kind": "hosted",
+    "code_configuration": {
+      "runtime": "dotnet_10",
+      "entry_point": ["dotnet", "agent.dll"],
+      "dependency_resolution": "bundled"
+    },
+    "cpu": "1",
+    "memory": "2Gi",
+    "protocol_versions": [
+      {"protocol": "responses", "version": "2.0.0"}
+    ],
+    "environment_variables": {
+      "AZURE_AI_MODEL_DEPLOYMENT_NAME": "agent-model"
+    }
+  }
+}'
 
-1. Expand the Tools section.
+# Upload the agent (multipart: metadata JSON + code ZIP, SHA-256 as header)
+curl -sS -X POST \
+  "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
+  -H "Authorization: Bearer $(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)" \
+  -H "x-ms-code-zip-sha256: ${ZIP_SHA256}" \
+  -F "metadata=$(echo "$DEFINITION")" \
+  -F "code=@src/agent.zip;type=application/zip"
+```
 
-1. On the **Web search**, click the vertical three-dot menu (**⋮**) or options icon, then click **Remove**.
+#### 2c. Poll until the agent version is active
 
-1. Then click **Add** button.
+```bash
+while true; do
+  STATUS=$(az rest --method GET \
+    --url "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
+    --resource "https://ai.azure.com" \
+    --query "data[0].status" -o tsv)
+  echo "Status: ${STATUS}"
+  if [ "$STATUS" = "active" ]; then
+    break
+  fi
+  if [ "$STATUS" = "failed" ]; then
+    echo "Deployment failed. Check the Foundry portal for logs."
+    exit 1
+  fi
+  sleep 10
+done
+echo "Agent is active!"
+```
 
-1. From the drop down list select the option **Add tools**.
+#### 2d. (Optional) Test the agent locally before deploying
 
-1. From the popup window select the tool type 'Grounding with Bing Search'.
+You can run the agent on your machine and test it with `curl` before uploading to Foundry. This requires Docker and a valid Azure credential for model access.
 
-1. Click **Add tool**.
+1. Run the agent locally in one terminal:
 
-1. From the 'Grounding with Bing Search connection' drop down list choose the existing connection named 'bingaiagent', and click the **Add** button.
+   ```bash
+   export FOUNDRY_PROJECT_ENDPOINT="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}"
+   export AZURE_AI_MODEL_DEPLOYMENT_NAME="agent-model"
 
-1. Click **Save** buton at the top-right of the Agents' Playground panel.
+   docker run --rm -it \
+     -v "$PWD":/work -w /work/src/agent \
+     -e FOUNDRY_PROJECT_ENDPOINT \
+     -e AZURE_AI_MODEL_DEPLOYMENT_NAME \
+     -p 8088:8088 \
+     mcr.microsoft.com/devcontainers/dotnet:dev-10.0 \
+     bash -c "dotnet run"
+   ```
+
+2. In a separate terminal, send a test request:
+
+   ```bash
+   curl -sS -X POST http://localhost:8088/responses \
+     -H "Content-Type: application/json" \
+     -d '{"input": "What is the weather today in Seattle?", "stream": false}'
+   ```
+
+   You should see a JSON response with grounded text and web citations.
 
 ### 3. Test the agent from the Foundry portal in the playground
 
-Here you'll test your orchestration agent by invoking it directly from the Foundry portal agent playground chat experience.
+Here you'll test your hosted agent by invoking it directly from the Foundry portal agent playground chat experience.
 
-1. Select the agent you just saved from the previous step named 'baseline-chatbot-agent'.
+1. Navigate to the Foundry project named **projchat** and open the Foundry portal by clicking the **Go to Foundry portal** button (or go directly to <https://ai.azure.com>).
+
+1. In the top-right corner, click **Build** to open the **Agents** blade.
+
+1. Select the agent named 'baseline-chatbot-agent'. It should show status **Active** with version 1.
 
 1. Enter a question to the agent that would require grounding data through recent internet content, such as a notable recent event or the weather today in your location.
 
@@ -201,7 +280,7 @@ Workloads build chat functionality into an application. Those interfaces usually
    ```bash
    docker run --rm -v "$PWD":/work -w /work \
      mcr.microsoft.com/devcontainers/dotnet:dev-10.0 \
-     bash -c "apt-get update && apt-get install -y zip && cd src/chatui && dotnet publish -c Release -o ./publish && cd ../.. && zip -r src/chatui.zip chatui/publish"
+     bash -c "apt-get update && apt-get install -y zip && cd src/chatui && dotnet publish -c Release -o ./publish && cd ../.. && rm -rf /tmp/chatui-zip && mkdir -p /tmp/chatui-zip && cp -r src/chatui/publish/* /tmp/chatui-zip/ && cd /tmp/chatui-zip && zip -r /work/src/chatui.zip ."
    ```
 
    Then deploy the package to Azure App Service:
@@ -222,7 +301,7 @@ You can also execute the following from your workstation. Unfortunately, this co
 az webapp browse -g $RESOURCE_GROUP -n $APPSERVICE_NAME
 ```
 
-Once you're there, ask your solution a question. Your question should involve something that would only be known if the RAG process included context from Bing such as recent weather or events.
+Once you're there, ask your solution a question. Your question should involve something that would only be known with real-time web search context, such as recent weather or events.
 
 ## :broom: Clean up resources
 
