@@ -144,8 +144,7 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
       AZURE_CLIENT_ID: appServiceManagedIdentity.properties.clientId
       ApplicationInsightsAgent_EXTENSION_VERSION: '~3'
       AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
-      AIAgentId: 'Not yet set' // Will be set once the agent is created
-      AIAgentVersion: 'Not yet set' // Will be set once the agent is created
+      AIAgentEndpoint: '${foundry::project.properties.endpoints['AI Foundry API']}/agents/baseline-chatbot-agent/endpoint/protocols/openai'
       XDT_MicrosoftApplicationInsights_Mode: 'Recommended'
     }
   }

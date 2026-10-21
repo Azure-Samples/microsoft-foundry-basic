@@ -180,8 +180,9 @@
         const chatContainer = document.querySelector(".msger-chat");
         const messageInput = chatForm?.elements?.message;
 
-        const { id } = await createThread();
-        const threadId = id;
+        // Empty until the first response: Foundry assigns the hosted-agent session
+        // id on the first turn and the app adopts it for subsequent turns.
+        let threadId = "";
 
         addChatMessage(BOT_NAME, "left", "How can I help you today?");
 
@@ -205,7 +206,8 @@
         });
 
         async function sendPrompt(prompt) {
-            const response = await fetch(`/chat/responses/${threadId}`, {
+            const url = threadId ? `/chat/responses/${threadId}` : "/chat/responses";
+            const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(prompt)
@@ -216,21 +218,12 @@
                 throw new Error(`Error sending prompt: ${errorMessage}`);
             }
 
-            return response.json();
-        }
-
-        async function createThread() {
-            const response = await fetch("/chat/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (!response.ok) {
-                const errorMessage = await response.text().catch(() => response.statusText);
-                throw new Error(`Error creating session: ${errorMessage}`);
+            const result = await response.json();
+            if (result.id) {
+                threadId = result.id;
             }
 
-            return response.json();
+            return result;
         }
 
         function addChatMessage(name, side, text) {

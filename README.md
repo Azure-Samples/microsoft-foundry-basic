@@ -45,7 +45,7 @@ Ideally agents should be source-controlled and a versioned asset. You then can d
 
 A chat UI application is deployed into Azure App Service. The .NET code uses the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) with the Foundry provider to connect to the workload's hosted agent. The endpoint for the agent is exposed over internet through Foundry.
 
-Agent invocation at runtime uses a different API surface than agent lifecycle management. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) uses exclusively the [OpenAI Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs, identifying the agent by name and version directly in the request body. This works identically for hosted agents — the platform routes requests to the agent's container.
+Agent invocation at runtime uses a different API surface than agent lifecycle management. Hosted agents are invoked through their agent-specific endpoint (`.../agents/<agentName>/endpoint/protocols/openai`), where the platform serves the [Conversations](https://learn.microsoft.com/rest/api/aifoundry/aiproject#conversations) and [Responses](https://learn.microsoft.com/rest/api/aifoundry/aiproject#responses-94) APIs: the app creates a conversation, and the platform stores message history under that conversation id for the lifetime of the chat. The active agent version is resolved by the endpoint's administrator-controlled version selector.
 
 ## Deployment guide
 
@@ -255,23 +255,9 @@ Here you'll test your hosted agent by invoking it directly from the Foundry port
 
 ### 4. Deploy the chat front-end web app
 
-Workloads build chat functionality into an application. Those interfaces usually call Foundry project endpoint invoking a particular agent. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
+Workloads build chat functionality into an application. Those interfaces usually call the agent's endpoint in Foundry Agent Service. This implementation comes with such an interface. You'll deploy it to Azure App Service using the Azure CLI.
 
-1. Update the app configuration to use the agent you deployed.
-
-   ```bash
-   FOUNDRY_NAME="aif${BASE_NAME}"
-   FOUNDRY_PROJECT_NAME="projchat"
-   FOUNDRY_AGENTS_URL="https://${FOUNDRY_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT_NAME}/agents?api-version=2025-11-15-preview"
-
-   AGENT_ID=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query last_id -o tsv)
-   AGENT_VERSION=$(az rest -u $FOUNDRY_AGENTS_URL -m "get" --resource "https://ai.azure.com" --query 'data[-1].versions.latest.version' -o tsv)
-
-   echo "$AGENT_ID (version $AGENT_VERSION)"
-
-   APPSERVICE_NAME=app-$BASE_NAME
-   az webapp config appsettings set -g $RESOURCE_GROUP -n $APPSERVICE_NAME --settings AIAgentId=${AGENT_ID} AIAgentVersion=${AGENT_VERSION}
-   ```
+The web app's app settings (including the agent endpoint) are configured by the infrastructure deployment in step 1, so no additional configuration is needed here.
 
 1. Deploy the ChatUI web app
 
@@ -286,6 +272,7 @@ Workloads build chat functionality into an application. Those interfaces usually
    Then deploy the package to Azure App Service:
 
    ```bash
+   APPSERVICE_NAME=app-$BASE_NAME
    az webapp deploy -g $RESOURCE_GROUP -n $APPSERVICE_NAME --type zip --src-path src/chatui.zip
    ```
 

@@ -27,9 +27,11 @@ public class FoundryAgentResolver : IDisposable
         if (current is not null)
             return current;
 
-        var name = _options.CurrentValue.AIAgentId;
-        var version = _options.CurrentValue.AIAgentVersion;
-        var agent = _projectClient.AsAIAgent(new AgentReference(name, version));
+        // Hosted agents are reached through an agent-specific endpoint. The agent name is
+        // parsed from the URI and the active version is resolved server side from the
+        // endpoint's administrator-controlled version selector.
+        var agentEndpoint = new Uri(_options.CurrentValue.AIAgentEndpoint);
+        var agent = _projectClient.AsAIAgent(agentEndpoint);
 
         _agent = agent;
         return agent;

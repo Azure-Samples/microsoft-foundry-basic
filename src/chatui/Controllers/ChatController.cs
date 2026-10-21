@@ -16,8 +16,8 @@ public class ChatController(
 {
     // TODO: [security] Do not trust client to provide conversationId. Instead map current user to their active conversationId in your application's own state store.
     // Without this security control in place, a user can inject messages into another user's conversation.
-    [HttpPost("{conversationId}")]
-    public async Task<IActionResult> Responses([FromRoute] string conversationId, [FromBody] string message)
+    [HttpPost("{conversationId?}")]
+    public async Task<IActionResult> Responses([FromRoute] string? conversationId, [FromBody] string message)
     {
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException("Message cannot be null, empty, or whitespace.", nameof(message));
@@ -27,22 +27,29 @@ public class ChatController(
 
         FoundryAgent agent = agentResolver.GetAgent();
 
-        var innerAgent = agent.GetService<ChatClientAgent>()!;
-        var session = await innerAgent.CreateSessionAsync(conversationId);
+        AgentSession session;
+        string? conversationIdResult;
+        if (string.IsNullOrEmpty(conversationId))
+        {
+            // First turn: create a server-side conversation through the platform's
+            // Conversations API. The platform stores message history under the
+            // returned id and binds a stable hosted-agent session to it.
+            var conversationSession = (ChatClientAgentSession)await agent.CreateConversationSessionAsync();
+            session = conversationSession;
+            conversationIdResult = conversationSession.ConversationId;
+        }
+        else
+        {
+            // Subsequent turns: resume the existing server-side conversation.
+            var innerAgent = agent.GetService<ChatClientAgent>()!;
+            session = await innerAgent.CreateSessionAsync(conversationId);
+            conversationIdResult = conversationId;
+        }
+
         var response = await agent.RunAsync(message, session);
 
-        return Ok(new { data = response.ToString() });
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Conversations()
-    {
-        // TODO [performance efficiency] Delay creating a conversation until the first user message arrives.
-        FoundryAgent agent = agentResolver.GetAgent();
-
-        var session = await agent.CreateConversationSessionAsync();
-
-        return Ok(new { id = session.ConversationId });
+        // Return the conversation id so the client carries it on subsequent turns.
+        return Ok(new { data = response.ToString(), id = conversationIdResult });
     }
 
     private static string SanitizeForLog(string input)
