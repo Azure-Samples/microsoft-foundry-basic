@@ -13,6 +13,7 @@ namespace chatui.Controllers;
 [Route("[controller]/[action]")]
 public class ChatController(
     FoundryAgentResolver agentResolver,
+    SharedHostedSessionProvider sessionProvider,
     ILogger<ChatController> logger) : ControllerBase
 {
     public class Request
@@ -35,10 +36,11 @@ public class ChatController(
         FoundryAgent agent = agentResolver.GetAgent();
 
         // Stateless server: the client round-trips the serialized session. Turn 1 has none,
-        // so create a fresh one; later turns restore the prior conversation state.
+        // so create a fresh one pinned to the shared hosted sandbox; later turns restore
+        // the prior conversation state.
         AgentSession session = request.Session is { } saved
             ? await agent.DeserializeSessionAsync(saved)
-            : await agent.CreateSessionAsync();
+            : await CreatePinnedSessionAsync(agent);
 
         var response = await agent.RunAsync(request.Message, session);
 
@@ -48,6 +50,17 @@ public class ChatController(
         JsonElement serialized = await agent.SerializeSessionAsync(session);
 
         return Ok(new { data = response.ToString(), session = serialized });
+    }
+
+    /// <summary>
+    /// Creates a MAF session pinned to the shared hosted sandbox. The hosted session id is
+    /// provisioned through the agent administration API (pinned to a specific agent version);
+    /// attaching it here binds this MAF session's conversation to that sandbox.
+    /// </summary>
+    private async Task<AgentSession> CreatePinnedSessionAsync(FoundryAgent agent)
+    {
+        string hostedSessionId = await sessionProvider.GetHostedSessionIdAsync();
+        return await agent.CreateFoundryHostedAgentSessionAsync(hostedSessionId);
     }
 
     private static string SanitizeForLog(string input)
