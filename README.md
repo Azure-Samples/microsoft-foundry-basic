@@ -173,7 +173,8 @@ DEFINITION='{
       {"protocol": "responses", "version": "2.0.0"}
     ],
     "environment_variables": {
-      "AZURE_AI_MODEL_DEPLOYMENT_NAME": "agent-model"
+      "AZURE_AI_MODEL_DEPLOYMENT_NAME": "agent-model",
+      "BING_CONNECTION_NAME": "bing-ai-agent"
     }
   }
 }'
