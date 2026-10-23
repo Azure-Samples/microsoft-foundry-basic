@@ -18,8 +18,8 @@ AIProjectClient projectClient = new (projectEndpoint, new DefaultAzureCredential
 
 AIProjectConnection bingConnection = projectClient.Connections.GetConnection(bingConnectionName);
 #pragma warning disable AAIP001 // Bing grounding APIs are experimental
-Azure.AI.Projects.Agents.BingGroundingSearchToolOptions bingGroundingOptions = new(
-    searchConfigurations: [new Azure.AI.Projects.Agents.BingGroundingSearchConfiguration(projectConnectionId: bingConnection.Id)]);
+BingGroundingSearchToolOptions bingGroundingOptions = new(
+    searchConfigurations: [new BingGroundingSearchOptions(projectConnectionId: bingConnection.Id)]);
 
 AIAgent agent = projectClient
     .AsAIAgent(
