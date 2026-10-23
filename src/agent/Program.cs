@@ -17,17 +17,16 @@ var bingConnectionName = Environment.GetEnvironmentVariable("BING_CONNECTION_NAM
 AIProjectClient projectClient = new (projectEndpoint, new DefaultAzureCredential());
 
 AIProjectConnection bingConnection = projectClient.Connections.GetConnection(bingConnectionName);
-#pragma warning disable AAIP001 // BingCustomSearchToolOptions and BingCustomSearchOptions are experimental
-BingCustomSearchToolOptions bingCustomSearchToolParameters = new([
-        new BingCustomSearchOptions(bingConnection.Id, bingConnectionName)
-]);
+#pragma warning disable AAIP001 // Bing grounding APIs are experimental
+Azure.AI.Projects.Agents.BingGroundingSearchToolOptions bingGroundingOptions = new(
+    searchConfigurations: [new Azure.AI.Projects.Agents.BingGroundingSearchConfiguration(projectConnectionId: bingConnection.Id)]);
 
 AIAgent agent = projectClient
     .AsAIAgent(
         model: deployment,
         instructions: "You are a helpful Chatbot agent. You'll consult the Bing Search tool to answer questions. Always search the web for information before responding.",
         name: "baseline-chatbot-agent",
-        tools: [FoundryAITool.CreateBingCustomSearchTool(bingCustomSearchToolParameters)]);
+        tools: [FoundryAITool.CreateBingGroundingTool(bingGroundingOptions)]);
 
 var builder = AgentHost.CreateBuilder(args);
 builder.Services.AddFoundryResponses(agent);
