@@ -19,6 +19,7 @@ builder.Services.AddSingleton((provider) =>
 });
 
 builder.Services.AddSingleton<FoundryAgentResolver>();
+builder.Services.AddSingleton<SharedHostedSessionProvider>();
 
 builder.Services.AddControllersWithViews();
 

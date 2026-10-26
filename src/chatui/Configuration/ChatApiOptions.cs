@@ -8,8 +8,5 @@ public class ChatApiOptions
     public string AIProjectEndpoint { get; init; } = default!;
 
     [Required]
-    public string AIAgentId { get; init; } = default!;
-
-    [Required]
-    public string AIAgentVersion { get; init; } = default!;
+    public string AIAgentName { get; init; } = default!;
 }

@@ -180,8 +180,9 @@
         const chatContainer = document.querySelector(".msger-chat");
         const messageInput = chatForm?.elements?.message;
 
-        const { id } = await createThread();
-        const threadId = id;
+        // Serialized AgentSession round-tripped from the server each turn (null on turn 1).
+        // Kept in memory only: a page reload starts a fresh conversation.
+        let sessionState = null;
 
         addChatMessage(BOT_NAME, "left", "How can I help you today?");
 
@@ -205,10 +206,11 @@
         });
 
         async function sendPrompt(prompt) {
-            const response = await fetch(`/chat/responses/${threadId}`, {
+            const url = "/chat/responses";
+            const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(prompt)
+                body: JSON.stringify({ message: prompt, session: sessionState })
             });
 
             if (!response.ok) {
@@ -216,21 +218,12 @@
                 throw new Error(`Error sending prompt: ${errorMessage}`);
             }
 
-            return response.json();
-        }
-
-        async function createThread() {
-            const response = await fetch("/chat/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (!response.ok) {
-                const errorMessage = await response.text().catch(() => response.statusText);
-                throw new Error(`Error creating session: ${errorMessage}`);
+            const result = await response.json();
+            if (result.session) {
+                sessionState = result.session;
             }
 
-            return response.json();
+            return result;
         }
 
         function addChatMessage(name, side, text) {

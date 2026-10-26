@@ -27,9 +27,16 @@ public class FoundryAgentResolver : IDisposable
         if (current is not null)
             return current;
 
-        var name = _options.CurrentValue.AIAgentId;
-        var version = _options.CurrentValue.AIAgentVersion;
-        var agent = _projectClient.AsAIAgent(new AgentReference(name, version));
+        // Hosted agents are reached through their per-agent endpoint, derived from the
+        // project endpoint and the registered agent name. The active version is resolved
+        // server side from the endpoint's administrator-controlled version selector.
+        var projectEndpoint = new Uri(_options.CurrentValue.AIProjectEndpoint);
+        var agentEndpoint = new UriBuilder(projectEndpoint)
+        {
+            Path = $"{projectEndpoint.PathAndQuery.TrimEnd('/')}/agents/{_options.CurrentValue.AIAgentName}/endpoint/protocols/openai"
+        }.Uri;
+
+        var agent = _projectClient.AsAIAgent(agentEndpoint);
 
         _agent = agent;
         return agent;
