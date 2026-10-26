@@ -12,7 +12,7 @@ var projectEndpoint = new Uri(Environment.GetEnvironmentVariable("FOUNDRY_PROJEC
 var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME")
     ?? "agent-model";
 var bingConnectionName = Environment.GetEnvironmentVariable("BING_CONNECTION_NAME")
-    ?? "bing-ai-agent";
+    ?? "bingaiagent";
 
 AIProjectClient projectClient = new (projectEndpoint, new DefaultAzureCredential());
 
