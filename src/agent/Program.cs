@@ -14,7 +14,7 @@ var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_N
 var bingConnectionName = Environment.GetEnvironmentVariable("BING_CONNECTION_NAME")
     ?? "bingaiagent";
 
-AIProjectClient projectClient = new (projectEndpoint, new DefaultAzureCredential());
+AIProjectClient projectClient = new (projectEndpoint, new ManagedIdentityCredential());
 
 AIProjectConnection bingConnection = projectClient.Connections.GetConnection(bingConnectionName);
 #pragma warning disable AAIP001 // Bing grounding APIs are experimental
