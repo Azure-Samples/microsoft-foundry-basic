@@ -158,13 +158,27 @@ AGENT_NAME="baseline-chatbot-agent"
 # Compute the SHA-256 of the ZIP
 ZIP_SHA256=$(sha256sum src/agent.zip | awk '{print $1}')
 
-# Upload the agent (multipart: metadata JSON + code ZIP, SHA-256 as header)
-curl -sS -X POST \
-  "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
-  -H "Authorization: Bearer $(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)" \
-  -H "x-ms-code-zip-sha256: ${ZIP_SHA256}" \
-  -F "metadata=@agents/chat-with-bing.json;type=application/json" \
-  -F "code=@src/agent.zip;type=application/zip"
+# Upload the agent (multipart form body with metadata JSON + code ZIP, SHA-256 as header)
+BOUNDARY="----FoundryAgentUpload"
+cat > /tmp/agent-upload-body <<EOF
+--${BOUNDARY}
+Content-Disposition: form-data; name="metadata"; filename="chat-with-bing.json"
+Content-Type: application/json
+
+$(cat agents/chat-with-bing.json)
+--${BOUNDARY}
+Content-Disposition: form-data; name="code"; filename="agent.zip"
+Content-Type: application/zip
+
+EOF
+cat src/agent.zip >> /tmp/agent-upload-body
+echo "--${BOUNDARY}--" >> /tmp/agent-upload-body
+
+az rest --method POST \
+  --url "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
+  --resource "https://ai.azure.com" \
+  --headers "x-ms-code-zip-sha256=${ZIP_SHA256} Content-Type=multipart/form-data; boundary=${BOUNDARY}" \
+  --body "@/tmp/agent-upload-body"
 ```
 
 #### 2c. Poll until the agent version is active
