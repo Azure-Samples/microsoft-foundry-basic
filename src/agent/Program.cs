@@ -11,15 +11,16 @@ var projectEndpoint = new Uri(Environment.GetEnvironmentVariable("FOUNDRY_PROJEC
     ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set."));
 var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME")
     ?? "agent-model";
-var bingConnectionName = Environment.GetEnvironmentVariable("BING_CONNECTION_NAME")
-    ?? "bingaiagent";
+// The agent identity can't resolve project connections by name at runtime (no RBAC on the
+// connection read API), so the full connection resource ID is injected via environment variable.
+var bingConnectionId = Environment.GetEnvironmentVariable("BING_CONNECTION_ID")
+    ?? throw new InvalidOperationException("BING_CONNECTION_ID is not set.");
 
 AIProjectClient projectClient = new (projectEndpoint, new ManagedIdentityCredential());
 
-AIProjectConnection bingConnection = projectClient.Connections.GetConnection(bingConnectionName);
 #pragma warning disable AAIP001 // Bing grounding APIs are experimental
 BingGroundingSearchToolOptions bingGroundingOptions = new(
-    searchConfigurations: [new BingGroundingSearchOptions(projectConnectionId: bingConnection.Id)]);
+    searchConfigurations: [new BingGroundingSearchOptions(projectConnectionId: bingConnectionId)]);
 
 AIAgent agent = projectClient
     .AsAIAgent(

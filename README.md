@@ -158,12 +158,15 @@ AGENT_NAME="baseline-chatbot-agent"
 # Compute the SHA-256 of the ZIP
 ZIP_SHA256=$(sha256sum src/agent.zip | awk '{print $1}')
 
+BING_CONNECTION_ID="$(az cognitiveservices account show -n $FOUNDRY_NAME -g $RESOURCE_GROUP --query 'id' -o tsv)/projects/${FOUNDRY_PROJECT_NAME}/connections/bingaiagent"
+sed "s|{{BING_CONNECTION_ID}}|${BING_CONNECTION_ID}|" agents/chat-with-bing.json > /tmp/agent-definition.json
+
 # Upload the agent (multipart: metadata JSON + code ZIP, SHA-256 as header)
 curl -sS -X POST \
   "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
   -H "Authorization: Bearer $(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)" \
   -H "x-ms-code-zip-sha256: ${ZIP_SHA256}" \
-  -F "metadata=@agents/chat-with-bing.json;type=application/json" \
+  -F "metadata=@/tmp/agent-definition.json;type=application/json" \
   -F "code=@src/agent.zip;type=application/zip"
 ```
 
