@@ -72,6 +72,18 @@ module deployFoundryProject 'ai-foundry-project.bicep' = {
   }
 }
 
+@description('Deploy an Azure Container Registry used as the deployment medium for the chat web app and the hosted agent.')
+module deployAcr 'acr.bicep' = {
+  scope: resourceGroup()
+  name: 'acrDeploy'
+  params: {
+    location: location
+    baseName: baseName
+    existingFoundryName: deployFoundry.outputs.foundryName
+    existingFoundryProjectName: deployFoundryProject.outputs.aiAgentProjectName
+  }
+}
+
 // Deploy the Azure Web App resources for the chat UI.
 
 @description('Deploy Application Insights. Used by the Azure Web App to monitor the deployed application and connected to the Foundry project.')
@@ -96,6 +108,7 @@ module deployWebApp 'web-app.bicep' = {
     existingWebApplicationInsightsResourceName: deployApplicationInsights.outputs.applicationInsightsName
     existingFoundryResourceName: deployFoundry.outputs.foundryName
     existingFoundryProjectName: deployFoundryProject.outputs.aiAgentProjectName
+    existingAcrName: deployAcr.outputs.acrName
   }
 }
 
