@@ -29,6 +29,10 @@ param existingFoundryResourceName string
 @minLength(2)
 param existingFoundryProjectName string
 
+@description('The name of the existing Azure Container Registry that hosts the chat web app container image.')
+@minLength(1)
+param existingAcrName string
+
 // variables
 var appName = 'app-${baseName}'
 
@@ -56,6 +60,17 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2026-05-15-preview' exist
   resource project 'projects' existing = {
     name: existingFoundryProjectName
    }
+}
+
+@description('Existing Azure Container Registry. Hosts the container image for the chat web app.')
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: existingAcrName
+}
+
+@description('Built-in Role: [AcrPull](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#acrpull)')
+resource acrPullRole 'Microsoft.Authorization/roleDefinitions@2022-05-01-preview' existing = {
+  name: '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+  scope: subscription()
 }
 
 // ---- New resources ----
@@ -129,9 +144,12 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
       http20Enabled: false
       publicNetworkAccess: 'Enabled'
       alwaysOn: true
-      linuxFxVersion: 'DOTNETCORE|10.0'
+      linuxFxVersion: 'DOCKER|${acr.properties.loginServer}/chatui:latest'
       netFrameworkVersion: null
       windowsFxVersion: null
+      acrUseManagedIdentityCreds: true // Use a managed identity (instead of credentials) to pull the container image
+      #disable-next-line BCP037 // Valid property, not yet in the schema
+      acrUserManagedIdentityID: appServiceManagedIdentity.properties.clientId // Pull with this user-assigned identity (AcrPull granted in IaC)
     }
   }
   dependsOn: []
@@ -145,6 +163,7 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
       ApplicationInsightsAgent_EXTENSION_VERSION: '~3'
       AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
       AIAgentName: 'baseline-chatbot-agent' // The app derives the agent endpoint from the project endpoint and this name
+      WEBSITES_PORT: '8080'
       XDT_MicrosoftApplicationInsights_Mode: 'Recommended'
     }
   }
@@ -202,6 +221,17 @@ resource azureDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-prev
         enabled: true
       }
     ]
+  }
+}
+
+@description('Grant the App Service user-assigned identity AcrPull permission so it can pull the chat web app image from the container registry.')
+resource acrPullRoleAssignmentUserIdentity 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: acr
+  name: guid(acr.id, appServiceManagedIdentity.id, acrPullRole.id)
+  properties: {
+    roleDefinitionId: acrPullRole.id
+    principalType: 'ServicePrincipal'
+    principalId: appServiceManagedIdentity.properties.principalId
   }
 }
 
