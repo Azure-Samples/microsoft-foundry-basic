@@ -1,10 +1,8 @@
 {
   "definition": {
     "kind": "hosted",
-    "code_configuration": {
-      "runtime": "dotnet_10",
-      "entry_point": ["dotnet", "agent.dll"],
-      "dependency_resolution": "bundled"
+    "container_configuration": {
+      "image": "{{ACR_LOGIN_SERVER}}/agent:latest"
     },
     "cpu": "1",
     "memory": "2Gi",
