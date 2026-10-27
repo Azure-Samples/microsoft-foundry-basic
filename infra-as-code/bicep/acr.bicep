@@ -32,7 +32,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
   properties: {
     adminUserEnabled: false
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Enabled' // Production readiness change: In production, expose this registry to Web Apps and Foundry over private endpoints only.
     zoneRedundancy: 'Disabled'
   }
 }
