@@ -18,7 +18,7 @@ Microsoft Foundry hosts the Foundry Agent Service as a capability. Foundry Agent
 
 ![Diagram that shows a basic chat architecture.](docs/media/basic-architecture.svg)
 
-*Download a [Visio file](docs/media/basic-architecture.vsdx) of this architecture.*
+*Download a [Visio file](https://arch-center.azureedge.net/openai-end-to-end-basic.vsdx) of this architecture.*
 
 #### Workflow
 
