@@ -160,11 +160,10 @@ BING_CONNECTION_ID="$(az cognitiveservices account show -n $FOUNDRY_NAME -g $RES
 sed "s|{{ACR_LOGIN_SERVER}}|${ACR_LOGIN_SERVER}|; s|{{BING_CONNECTION_ID}}|${BING_CONNECTION_ID}|" agents/chat-with-bing.json > /tmp/agent-definition.json
 
 # Create the agent version (JSON body with the container image reference)
-curl -sS -X POST \
-  "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
-  -H "Authorization: Bearer $(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)" \
-  -H "Content-Type: application/json" \
-  -d @/tmp/agent-definition.json
+az rest --method POST \
+  --url "${FOUNDRY_BASE_URL}/agents/${AGENT_NAME}/versions?api-version=${API_VERSION}" \
+  --resource "https://ai.azure.com" \
+  --body @/tmp/agent-definition.json
 ```
 
 > The Bicep deployment in step 1 already grants the Foundry project managed identity `Container Registry Repository Reader` on the container registry, so the agent runtime can pull its image. No manual role assignment is needed.
