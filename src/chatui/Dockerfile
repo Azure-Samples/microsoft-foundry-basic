@@ -8,5 +8,4 @@ WORKDIR /app
 COPY --from=build /out .
 # launchSettings.json would pin Kestrel to a localhost dev URL instead of $PORT
 RUN rm -rf ./Properties/launchSettings.json
-EXPOSE 80
 ENTRYPOINT ["dotnet", "chatui.dll"]
