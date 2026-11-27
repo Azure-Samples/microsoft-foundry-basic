@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "9081525921070224170"
+      "templateHash": "16045627668561829120"
     }
   },
   "parameters": {
@@ -84,6 +84,9 @@
           "enablePrivateNetworking": {
             "value": false
           },
+          "webPubSubSkuName": {
+            "value": "Free_F1"
+          },
           "enableAiGateway": {
             "value": false
           },
@@ -104,7 +107,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "14050369704881334388"
+              "templateHash": "5995524218789859704"
             }
           },
           "parameters": {
@@ -187,6 +190,17 @@
               "defaultValue": true,
               "metadata": {
                 "description": "Deploy private endpoints and App Service VNet integration. Disable for public endpoints secured by TLS, managed identity, and RBAC."
+              }
+            },
+            "webPubSubSkuName": {
+              "type": "string",
+              "defaultValue": "Standard_S1",
+              "allowedValues": [
+                "Free_F1",
+                "Standard_S1"
+              ],
+              "metadata": {
+                "description": "Web PubSub SKU. Use Free_F1 only with enablePrivateNetworking=false."
               }
             },
             "aiAgentName": {
@@ -1110,6 +1124,9 @@
                   },
                   "enablePrivateNetworking": {
                     "value": "[parameters('enablePrivateNetworking')]"
+                  },
+                  "skuName": {
+                    "value": "[parameters('webPubSubSkuName')]"
                   }
                 },
                 "template": {
@@ -1119,7 +1136,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.46.1.21595",
-                      "templateHash": "11611878665394640336"
+                      "templateHash": "7756286365369870119"
                     }
                   },
                   "parameters": {
@@ -1152,6 +1169,17 @@
                       "metadata": {
                         "description": "Use a private endpoint and disable public network access."
                       }
+                    },
+                    "skuName": {
+                      "type": "string",
+                      "defaultValue": "Standard_S1",
+                      "allowedValues": [
+                        "Free_F1",
+                        "Standard_S1"
+                      ],
+                      "metadata": {
+                        "description": "Web PubSub SKU. Free supports 20 concurrent connections and 20,000 messages/day; private networking requires Standard."
+                      }
                     }
                   },
                   "variables": {
@@ -1164,38 +1192,16 @@
                       "name": "[variables('wpsName')]",
                       "location": "[parameters('location')]",
                       "sku": {
-                        "name": "Standard_S1",
-                        "tier": "Standard",
+                        "name": "[parameters('skuName')]",
+                        "tier": "[if(equals(parameters('skuName'), 'Free_F1'), 'Free', 'Standard')]",
                         "capacity": 1
                       },
                       "identity": {
                         "type": "SystemAssigned"
                       },
-                      "properties": {
-                        "disableLocalAuth": true,
-                        "publicNetworkAccess": "[if(parameters('enablePrivateNetworking'), 'Disabled', 'Enabled')]",
-                        "liveTraceConfiguration": {
-                          "enabled": "true",
-                          "categories": [
-                            {
-                              "name": "ConnectivityLogs",
-                              "enabled": "true"
-                            },
-                            {
-                              "name": "MessagingLogs",
-                              "enabled": "true"
-                            }
-                          ]
-                        },
-                        "networkACLs": {
-                          "defaultAction": "Allow",
-                          "publicNetwork": {
-                            "deny": "[if(parameters('enablePrivateNetworking'), createArray('ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace'), createArray())]"
-                          }
-                        }
-                      },
+                      "properties": "[union(createObject('disableLocalAuth', true(), 'publicNetworkAccess', if(parameters('enablePrivateNetworking'), 'Disabled', 'Enabled'), 'liveTraceConfiguration', createObject('enabled', 'true', 'categories', createArray(createObject('name', 'ConnectivityLogs', 'enabled', 'true'), createObject('name', 'MessagingLogs', 'enabled', 'true')))), if(equals(parameters('skuName'), 'Free_F1'), createObject(), createObject('networkACLs', createObject('defaultAction', 'Allow', 'publicNetwork', createObject('deny', if(parameters('enablePrivateNetworking'), createArray('ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace'), createArray()))))))]",
                       "metadata": {
-                        "description": "Web PubSub service. Standard tier, 1 unit — enough for tens of concurrent small meetings."
+                        "description": "Web PubSub service. One unit in the selected pricing tier."
                       }
                     },
                     {

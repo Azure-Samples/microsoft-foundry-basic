@@ -39,6 +39,13 @@ param retainPostgres bool = true
 @description('Deploy private endpoints and App Service VNet integration. Disable for public endpoints secured by TLS, managed identity, and RBAC.')
 param enablePrivateNetworking bool = true
 
+@description('Web PubSub SKU. Use Free_F1 only with enablePrivateNetworking=false.')
+@allowed([
+  'Free_F1'
+  'Standard_S1'
+])
+param webPubSubSkuName string = 'Standard_S1'
+
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
 
@@ -166,6 +173,7 @@ module deployWebPubSub 'web-pubsub.bicep' = {
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     enablePrivateNetworking: enablePrivateNetworking
+    skuName: webPubSubSkuName
   }
 }
 

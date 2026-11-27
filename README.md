@@ -54,7 +54,7 @@ scripts/deploy-infra.sh  Bicep deploy wrapper
   - Foundry / OpenAI: `gpt-5.4-mini` reasoning deployment (50k TPM), `gpt-realtime-translate` for Start talking, plus `gpt-realtime-2.1` and `gpt-live-transcribe` for Training and input transcription.
   - App Service Plan: B1 Linux (raise for load).
   - Storage account: Standard LRS. PostgreSQL `Standard_B1ms` remains only during migration.
-  - Web PubSub: 1 unit Standard.
+  - Web PubSub: the public production wrapper uses 1 unit Free_F1 (20 concurrent connections, 20,000 messages/day). The default remains Standard_S1 for private-network deployments; Free does not support private endpoints. Entra authentication remains enabled and local/key authentication disabled. Set `webPubSubSkuName` to `Standard_S1` when higher capacity is needed.
 - Deployment user permissions at subscription scope:
   - `User Access Administrator` or `Owner` (to assign roles to the App Service managed identity).
   - `Cognitive Services Contributor` (to purge soft-deleted accounts during cleanup).

@@ -30,6 +30,7 @@ module workload 'main.bicep' = {
     microsoftClientId: microsoftClientId
     retainPostgres: false
     enablePrivateNetworking: false
+    webPubSubSkuName: 'Free_F1'
     enableAiGateway: false
     routeAiThroughGateway: false
     foundryVoiceEnabled: true

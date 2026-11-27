@@ -23,6 +23,13 @@ param logAnalyticsWorkspaceName string
 @description('Use a private endpoint and disable public network access.')
 param enablePrivateNetworking bool = true
 
+@description('Web PubSub SKU. Free supports 20 concurrent connections and 20,000 messages/day; private networking requires Standard.')
+@allowed([
+  'Free_F1'
+  'Standard_S1'
+])
+param skuName string = 'Standard_S1'
+
 var wpsName = 'wps-${baseName}'
 
 // ---- Existing resources ----
@@ -33,19 +40,19 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
 
 // ---- New resources ----
 
-@description('Web PubSub service. Standard tier, 1 unit — enough for tens of concurrent small meetings.')
+@description('Web PubSub service. One unit in the selected pricing tier.')
 resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
   name: wpsName
   location: location
   sku: {
-    name: 'Standard_S1'
-    tier: 'Standard'
+    name: skuName
+    tier: skuName == 'Free_F1' ? 'Free' : 'Standard'
     capacity: 1
   }
   identity: {
     type: 'SystemAssigned'
   }
-  properties: {
+  properties: union({
     disableLocalAuth: true
     publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     liveTraceConfiguration: {
@@ -61,13 +68,14 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
         }
       ]
     }
+  }, skuName == 'Free_F1' ? {} : {
     networkACLs: {
       defaultAction: 'Allow'
       publicNetwork: {
         deny: enablePrivateNetworking ? ['ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace'] : []
       }
     }
-  }
+  })
 }
 
 @description('Diagnostic settings for Web PubSub.')
