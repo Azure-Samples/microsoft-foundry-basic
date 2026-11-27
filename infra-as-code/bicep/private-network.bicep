@@ -12,6 +12,28 @@ param webPubSubName string
 param applicationInsightsName string
 param logAnalyticsWorkspaceName string
 
+resource gatewayNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
+  name: 'nsg-apim-${baseName}'
+  location: location
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowKeyVaultOutbound'
+        properties: {
+          priority: 100
+          direction: 'Outbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'AzureKeyVault'
+          destinationPortRange: '443'
+        }
+      }
+    ]
+  }
+}
+
 resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   name: 'vnet-${baseName}'
   location: location
@@ -41,7 +63,23 @@ resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
           privateEndpointNetworkPolicies: 'Disabled'
         }
       }
-
+      {
+        name: 'ai-gateway'
+        properties: {
+          addressPrefix: '10.42.2.0/24'
+          networkSecurityGroup: {
+            id: gatewayNsg.id
+          }
+          delegations: [
+            {
+              name: 'api-management'
+              properties: {
+                serviceName: 'Microsoft.Web/serverFarms'
+              }
+            }
+          ]
+        }
+      }
     ]
   }
 }
@@ -201,4 +239,5 @@ resource zoneGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@202
 }]
 
 output appServiceSubnetId string = network.properties.subnets[0].id
+output aiGatewaySubnetId string = network.properties.subnets[2].id
 output networkName string = network.name

@@ -42,6 +42,16 @@ param enablePrivateNetworking bool = true
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
 
+@description('Provision the billable Standard v2 AI gateway. Traffic routing is controlled separately.')
+param enableAiGateway bool = false
+
+@description('Route HTTP Foundry project calls through the gateway after app deployment and smoke testing. Requires enableAiGateway.')
+param routeAiThroughGateway bool = false
+
+
+@description('API Management administrator email; required when enableAiGateway is true.')
+param aiGatewayPublisherEmail string = ''
+
 @description('Set to true to opt-out of deployment telemetry.')
 param telemetryOptOut bool = false
 
@@ -49,6 +59,7 @@ param telemetryOptOut bool = false
 var varCuaid = '6aa4564a-a8b7-4ced-8e57-1043a41f4747'
 
 var appName = 'app-${baseName}'
+var enableAiGatewayDeployment = enableAiGateway && enablePrivateNetworking
 
 // ---- New resources ----
 
@@ -210,6 +221,22 @@ module deployPrivateNetwork 'private-network.bicep' = if (enablePrivateNetworkin
   }
 }
 
+@description('Optional authenticated AI gateway with private outbound connectivity and model usage telemetry.')
+module deployAiGateway 'ai-gateway.bicep' = if (enableAiGatewayDeployment) {
+  name: 'aiGatewayDeploy'
+  params: {
+    baseName: baseName
+    location: location
+    publisherEmail: aiGatewayPublisherEmail
+    subnetId: deployPrivateNetwork!.outputs.aiGatewaySubnetId
+    projectEndpoint: deployFoundryProject.outputs.projectEndpoint
+    projectName: deployFoundryProject.outputs.aiAgentProjectName
+    appClientId: appServiceManagedIdentity.properties.clientId
+    applicationInsightsName: deployApplicationInsights.outputs.applicationInsightsName
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+  }
+}
+
 @description('Deploy the web app with managed identity access to private workload services.')
 module deployWebApp 'web-app.bicep' = {
   scope: resourceGroup()
@@ -237,8 +264,19 @@ module deployWebApp 'web-app.bicep' = {
     trainingMemberObjectId: yourPrincipalId
     aiAgentName: aiAgentName
     aiAgentVersion: aiAgentVersion
+    aiGatewayProjectEndpoint: enableAiGatewayDeployment && routeAiThroughGateway ? deployAiGateway!.outputs.projectEndpoint : ''
     enableVnetIntegration: enablePrivateNetworking
     appServiceSubnetId: enablePrivateNetworking ? deployPrivateNetwork!.outputs.appServiceSubnetId : ''
+  }
+}
+
+module deployAiGatewayPrivateNetwork 'ai-gateway-private-network.bicep' = if (enableAiGatewayDeployment) {
+  name: 'aiGatewayPrivateNetworkDeploy'
+  params: {
+    baseName: baseName
+    location: location
+    gatewayName: deployAiGateway!.outputs.gatewayName
+    networkName: deployPrivateNetwork!.outputs.networkName
   }
 }
 
@@ -266,4 +304,5 @@ output foundryName string = deployFoundry.outputs.foundryName
 output postgresName string = retainPostgres ? deployPostgres!.outputs.pgServerName : ''
 output storageAccountName string = deployTableStorage.outputs.storageAccountName
 output keyVaultName string = deployKeyVault.outputs.keyVaultName
+output aiGatewayProjectEndpoint string = enableAiGatewayDeployment ? deployAiGateway!.outputs.projectEndpoint : ''
 

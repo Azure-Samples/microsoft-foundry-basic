@@ -57,6 +57,17 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing  = {
   }
 }
 
+resource projectMonitoringReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(applicationInsights.id, foundry::project.id, 'Monitoring Reader')
+  scope: applicationInsights
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '43d0d8ad-25c7-4714-9337-8ba259a9fe05')
+    principalId: foundry::project.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // ---- Outputs ----
 
 output aiAgentProjectName string = foundry::project.name
+output projectEndpoint string = foundry::project.properties.endpoints['AI Foundry API']

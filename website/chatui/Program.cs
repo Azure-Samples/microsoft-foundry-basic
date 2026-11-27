@@ -81,7 +81,7 @@ builder.Services.AddSingleton((provider) =>
 {
     var config = provider.GetRequiredService<IOptions<ChatApiOptions>>().Value;
     var credential = provider.GetRequiredService<TokenCredential>();
-    return new AIProjectClient(new Uri(config.AIProjectEndpoint), credential);
+    return new AIProjectClient(new Uri(config.EffectiveAIProjectEndpoint), credential);
 });
 
 builder.Services.AddSingleton<FoundryAgentResolver>();

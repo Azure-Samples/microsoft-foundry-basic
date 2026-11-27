@@ -54,6 +54,28 @@ GOOGLE_CLIENT_SECRET_NAME="${GOOGLE_CLIENT_SECRET_NAME:-google-login-client-secr
 RETAIN_POSTGRES="${RETAIN_POSTGRES:-true}"
 ENABLE_PRIVATE_NETWORKING="${ENABLE_PRIVATE_NETWORKING:-true}"
 
+ENABLE_AI_GATEWAY="${ENABLE_AI_GATEWAY:-false}"
+ROUTE_AI_THROUGH_GATEWAY="${ROUTE_AI_THROUGH_GATEWAY:-false}"
+AI_GATEWAY_PUBLISHER_EMAIL="${AI_GATEWAY_PUBLISHER_EMAIL:-}"
+for var in RETAIN_POSTGRES ENABLE_PRIVATE_NETWORKING ENABLE_AI_GATEWAY ROUTE_AI_THROUGH_GATEWAY; do
+  if [[ "${!var}" != "true" && "${!var}" != "false" ]]; then
+    echo "ERROR: $var must be true or false."
+    exit 1
+  fi
+done
+if [[ "$ENABLE_AI_GATEWAY" == "true" && "$ENABLE_PRIVATE_NETWORKING" != "true" ]]; then
+  echo "ERROR: ENABLE_AI_GATEWAY requires ENABLE_PRIVATE_NETWORKING=true."
+  exit 1
+fi
+if [[ "$ENABLE_AI_GATEWAY" == "true" && "$AI_GATEWAY_PUBLISHER_EMAIL" != *@*.* ]]; then
+  echo "ERROR: AI_GATEWAY_PUBLISHER_EMAIL is required when enabling the gateway."
+  exit 1
+fi
+if [[ "$ROUTE_AI_THROUGH_GATEWAY" == "true" && "$ENABLE_AI_GATEWAY" != "true" ]]; then
+  echo "ERROR: ROUTE_AI_THROUGH_GATEWAY requires ENABLE_AI_GATEWAY=true."
+  exit 1
+fi
+
 # This takes about 15-20 minutes to run.
 DEPLOY_ARGS=(
   --subscription "$SUBSCRIPTION_ID"
@@ -67,6 +89,9 @@ DEPLOY_ARGS=(
   "googleClientSecretName=$GOOGLE_CLIENT_SECRET_NAME"
   "retainPostgres=$RETAIN_POSTGRES"
   "enablePrivateNetworking=$ENABLE_PRIVATE_NETWORKING"
+  "enableAiGateway=$ENABLE_AI_GATEWAY"
+  "routeAiThroughGateway=$ROUTE_AI_THROUGH_GATEWAY"
+  "aiGatewayPublisherEmail=$AI_GATEWAY_PUBLISHER_EMAIL"
 )
 az deployment group what-if "${DEPLOY_ARGS[@]}"
 az deployment group create "${DEPLOY_ARGS[@]}"

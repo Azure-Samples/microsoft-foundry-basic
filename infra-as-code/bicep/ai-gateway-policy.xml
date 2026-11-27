@@ -1,0 +1,29 @@
+<policies>
+  <inbound>
+    <base />
+    <validate-azure-ad-token tenant-id="__TENANT_ID__" failed-validation-httpcode="401">
+      <client-application-ids>
+        <application-id>__APP_CLIENT_ID__</application-id>
+      </client-application-ids>
+      <audiences>
+        <audience>https://ai.azure.com</audience>
+        <audience>https://ai.azure.com/</audience>
+      </audiences>
+    </validate-azure-ad-token>
+    <choose>
+      <when condition='@(context.Request.Method == "POST" &amp;&amp; context.Request.Url.Path.EndsWith("/responses"))'>
+        <llm-emit-token-metric namespace="AITranslator.Gateway">
+          <dimension name="API ID" />
+          <dimension name="Operation ID" />
+        </llm-emit-token-metric>
+      </when>
+    </choose>
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
+  </inbound>
+  <backend>
+    <forward-request timeout="240" buffer-response="false" />
+  </backend>
+  <outbound><base /></outbound>
+  <on-error><base /></on-error>
+</policies>

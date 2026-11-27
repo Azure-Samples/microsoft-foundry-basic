@@ -10,6 +10,12 @@ public class ChatApiOptions
     [Url]
     public string AIProjectEndpoint { get; init; } = default!;
 
+    [Url]
+    public string? AIGatewayProjectEndpoint { get; init; }
+
+    public string EffectiveAIProjectEndpoint =>
+        string.IsNullOrWhiteSpace(AIGatewayProjectEndpoint) ? AIProjectEndpoint : AIGatewayProjectEndpoint;
+
     [Required]
     public string AIAgentId { get; init; } = default!;
 

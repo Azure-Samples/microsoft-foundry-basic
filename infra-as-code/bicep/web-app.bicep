@@ -75,6 +75,7 @@ param enableVnetIntegration bool = true
 param appServiceSubnetId string = ''
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
+param aiGatewayProjectEndpoint string = ''
 
 @description('The name of the pre-created user-assigned managed identity that the App Service will run under. Created in main.bicep so data-plane resources can grant it roles before the web app exists.')
 @minLength(3)
@@ -281,7 +282,7 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       TableStorage__UsersTableName: usersTableName
       TableStorage__UserInvitesTableName: userInvitesTableName
       XDT_MicrosoftApplicationInsights_Mode: 'Recommended'
-    }, authProviderSettings)
+    }, authProviderSettings, empty(aiGatewayProjectEndpoint) ? {} : { AIGatewayProjectEndpoint: aiGatewayProjectEndpoint })
   }
 
   @description('Enable App Service Easy Auth v2 provider endpoints. The application keeps its login page public and authorizes protected routes itself.')
