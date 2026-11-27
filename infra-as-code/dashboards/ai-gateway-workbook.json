@@ -1,0 +1,96 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "coverage",
+      "content": {
+        "json": "## AI gateway usage and health\nApplication HTTP traffic through the foundry-project proxy only; the separate Foundry-managed API is excluded to avoid double counting. Realtime/audio, Translator and Speech are outside this report. Token metrics depend on backend usage fields; interrupted streams may undercount. No prompt, response body or authorization header capture is configured.\n\nCost estimates below use your supplied USD rates per million text tokens. Leave rates blank until you verify pricing for the deployed model. They treat all input as uncached, exclude audio and infrastructure, and are not billed charges. Do not combine different model price tiers in this estimate. Use Azure Cost Management for actual charges."
+      }
+    },
+    {
+      "type": 9,
+      "name": "parameters",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "9c12dc96-e314-4fa8-b63f-9bf81bcf0d96",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": { "selectableValues": [ { "durationMs": 3600000 }, { "durationMs": 86400000 }, { "durationMs": 604800000 } ] }
+          },
+          {
+            "id": "f6e897bd-a496-472e-8b48-492c335aab04",
+            "name": "Department",
+            "type": 2,
+            "value": "All",
+            "jsonData": "[{\"value\":\"All\",\"label\":\"All departments\"},{\"value\":\"Finance Dep\",\"label\":\"Finance Dep\"},{\"value\":\"Unallocated\",\"label\":\"Unallocated\"},{\"value\":\"Historical / unattributed\",\"label\":\"Historical / unattributed\"}]"
+          },
+          {
+            "id": "967a1f0c-c594-4629-a835-cb7da76ff948",
+            "name": "InputUsdPerMillion",
+            "type": 1,
+            "value": ""
+          },
+          {
+            "id": "7f42a5c8-40a0-4d29-a573-7661d3dce92f",
+            "name": "OutputUsdPerMillion",
+            "type": 1,
+            "value": ""
+          }
+        ],
+        "style": "pills"
+      }
+    },
+    {
+      "type": 3,
+      "name": "gateway-health",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Gateway requests, failures and latency",
+        "query": "ApiManagementGatewayLogs\n| where ApiId endswith 'foundry-project'\n| extend Subscription=tostring(ApimSubscriptionId)\n| extend Department=case(isempty(Subscription), 'Historical / unattributed', Subscription endswith '__FINANCE_SUBSCRIPTION_ID__', 'Finance Dep', 'Unallocated')\n| where '{Department:escape}' == 'All' or Department == '{Department:escape}'\n| summarize Requests=count(), Failed=countif(ResponseCode >= 400), Throttled=countif(ResponseCode == 429), P95Milliseconds=percentile(TotalTime, 95) by Department, bin(TimeGenerated, 15m)\n| order by TimeGenerated asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "resourceIds": ["__WORKSPACE_ID__"],
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "gateway-tokens",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Reported token metrics (do not sum different token categories)",
+        "query": "customMetrics\n| where tostring(customDimensions['API ID']) endswith 'foundry-project'\n| where name contains 'Tokens'\n| extend Department=coalesce(tostring(customDimensions['Department']), 'Historical / unattributed')\n| where '{Department:escape}' == 'All' or Department == '{Department:escape}'\n| summarize Tokens=sum(coalesce(valueSum, value)) by Department, bin(timestamp, 15m), name\n| order by timestamp asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "resourceIds": ["__INSIGHTS_ID__"],
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "gateway-cost",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Text-token estimate in USD (not billed cost)",
+        "query": "let inputRate = todouble('{InputUsdPerMillion:escape}');\nlet outputRate = todouble('{OutputUsdPerMillion:escape}');\ncustomMetrics\n| where tostring(customDimensions['API ID']) endswith 'foundry-project'\n| extend Department=coalesce(tostring(customDimensions['Department']), 'Historical / unattributed')\n| where '{Department:escape}' == 'All' or Department == '{Department:escape}'\n| summarize InputTokens=sumif(coalesce(valueSum, value), name endswith 'Prompt Tokens'), OutputTokens=sumif(coalesce(valueSum, value), name endswith 'Completion Tokens'), UsageSamples=countif(name endswith 'Prompt Tokens' or name endswith 'Completion Tokens') by Department\n| extend PricingConfigured=isnotnull(inputRate) and isnotnull(outputRate) and inputRate >= 0 and outputRate >= 0\n| extend EstimatedUSD=iff(PricingConfigured and UsageSamples > 0, (InputTokens * inputRate + OutputTokens * outputRate) / 1000000.0, real(null))\n| project Department, InputTokens, OutputTokens, UsageSamples, PricingConfigured, EstimatedUSD",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "resourceIds": ["__INSIGHTS_ID__"],
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "table"
+      }
+    }
+  ],
+  "fallbackResourceIds": ["__INSIGHTS_ID__"],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

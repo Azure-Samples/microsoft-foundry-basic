@@ -16,6 +16,61 @@ namespace chatui.Tests;
 public sealed class TrainingTransportTests
 {
     [Theory]
+    [InlineData("Department.Finance", true, true)]
+    [InlineData("Department.HR", true, false)]
+    [InlineData("Department.Finance", false, false)]
+    [InlineData("", true, false)]
+    [InlineData("Department.Finance,Department.HR", true, false)]
+    public void GatewayDepartmentRequiresTrustedUnambiguousFinanceRole(string roles, bool correctTenant, bool expected)
+    {
+        const string tenantId = "acaa000d-7d61-417a-99c0-c5d791278c97";
+        var claims = new List<object>
+        {
+            new { typ = "tid", val = correctTenant ? tenantId : Guid.NewGuid().ToString() },
+            new { typ = "oid", val = Guid.NewGuid().ToString() },
+        };
+        claims.AddRange(roles.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(role => (object)new { typ = "roles", val = role }));
+        var context = new DefaultHttpContext();
+        context.Request.Headers["X-MS-CLIENT-PRINCIPAL"] = Convert.ToBase64String(
+            JsonSerializer.SerializeToUtf8Bytes(new { auth_typ = "aad", claims }));
+
+        Assert.Equal(expected, GatewayDepartmentContext.IsFinancePrincipal(context, tenantId, "Department.Finance"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not base64")]
+    [InlineData("e30=")]
+    public void GatewayDepartmentNeverDefaultsToFinance(string? principal)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers["X-MS-CLIENT-PRINCIPAL"] = principal;
+        context.Request.Headers["X-Department"] = "Finance";
+        Assert.False(GatewayDepartmentContext.IsFinancePrincipal(context,
+            "acaa000d-7d61-417a-99c0-c5d791278c97", "Department.Finance"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("https://gateway.example/api/projects/projchat")]
+    public void GatewayOverridesOnlyHttpProjectEndpoint(string? gatewayEndpoint)
+    {
+        const string directEndpoint = "https://foundry.example/api/projects/projchat";
+        var options = new chatui.Configuration.ChatApiOptions
+        {
+            AIProjectEndpoint = directEndpoint,
+            AIGatewayProjectEndpoint = gatewayEndpoint,
+        };
+
+        Assert.Equal(string.IsNullOrWhiteSpace(gatewayEndpoint) ? directEndpoint : gatewayEndpoint,
+            options.EffectiveAIProjectEndpoint);
+        Assert.Equal(directEndpoint, options.AIProjectEndpoint);
+    }
+
+    [Theory]
     [InlineData("en", true, false, false, "preserved", "acceptable", true)]
     [InlineData("ru", true, false, false, "preserved", "acceptable", false)]
     [InlineData("mixed", true, false, false, "preserved", "acceptable", false)]

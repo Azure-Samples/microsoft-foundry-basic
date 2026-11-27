@@ -15,6 +15,8 @@
         <llm-emit-token-metric namespace="AITranslator.Gateway">
           <dimension name="API ID" />
           <dimension name="Operation ID" />
+          <dimension name="Subscription ID" />
+          <dimension name="Department" value='@(context.Subscription != null &amp;&amp; context.Subscription.Id == "__FINANCE_SUBSCRIPTION_ID__" ? "Finance Dep" : "Unallocated")' />
         </llm-emit-token-metric>
       </when>
     </choose>

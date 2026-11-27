@@ -35,6 +35,35 @@ builder.Services.AddOptions<TableStorageOptions>()
 builder.Services.AddOptions<DevAuthOptions>()
     .Bind(builder.Configuration.GetSection(DevAuthOptions.SectionName));
 
+builder.Services.AddOptions<GatewayDepartmentOptions>()
+    .Bind(builder.Configuration.GetSection(GatewayDepartmentOptions.SectionName))
+    .Validate(options => !options.Enabled || (Guid.TryParse(options.TenantId, out _)
+        && options.FinanceRole.StartsWith("Department.", StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(options.FinanceSubscriptionKey)
+        && !options.FinanceSubscriptionKey.StartsWith("@Microsoft.KeyVault", StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(options.UnallocatedSubscriptionKey)
+        && !options.UnallocatedSubscriptionKey.StartsWith("@Microsoft.KeyVault", StringComparison.Ordinal)),
+        "Enabled gateway attribution requires a tenant, department role and resolved subscription key.")
+    .Validate(options => !options.Enabled || Uri.TryCreate(builder.Configuration["AIGatewayProjectEndpoint"],
+        UriKind.Absolute, out var endpoint) && endpoint.Scheme == Uri.UriSchemeHttps,
+        "Enabled gateway attribution requires an HTTPS gateway project endpoint.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<GatewayDepartmentContext>();
+builder.Services.AddHttpClient("FoundryGateway", client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(provider =>
+{
+    var config = provider.GetRequiredService<IOptions<ChatApiOptions>>().Value;
+    var handler = new chatui.Services.GatewaySubscriptionHandler(
+        provider.GetRequiredService<GatewayDepartmentContext>(),
+        provider.GetRequiredService<IOptions<GatewayDepartmentOptions>>(),
+        new Uri(config.EffectiveAIProjectEndpoint))
+    {
+        InnerHandler = new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) },
+    };
+    return handler;
+});
+
 builder.Services.AddOptions<TranslatorOptions>()
     .Bind(builder.Configuration.GetSection(TranslatorOptions.SectionName))
     .ValidateDataAnnotations()
@@ -81,7 +110,12 @@ builder.Services.AddSingleton((provider) =>
 {
     var config = provider.GetRequiredService<IOptions<ChatApiOptions>>().Value;
     var credential = provider.GetRequiredService<TokenCredential>();
-    return new AIProjectClient(new Uri(config.EffectiveAIProjectEndpoint), credential);
+    var clientOptions = new AIProjectClientOptions
+    {
+        Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient("FoundryGateway")),
+    };
+    return new AIProjectClient(new Uri(config.EffectiveAIProjectEndpoint), credential, clientOptions);
 });
 
 builder.Services.AddSingleton<FoundryAgentResolver>();

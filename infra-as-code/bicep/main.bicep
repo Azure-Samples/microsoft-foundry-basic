@@ -48,6 +48,8 @@ param enableAiGateway bool = false
 @description('Route HTTP Foundry project calls through the gateway after app deployment and smoke testing. Requires enableAiGateway.')
 param routeAiThroughGateway bool = false
 
+param enableGatewayDepartmentAttribution bool = false
+param gatewayFinanceSubscriptionId string = ''
 
 @description('API Management administrator email; required when enableAiGateway is true.')
 param aiGatewayPublisherEmail string = ''
@@ -234,6 +236,8 @@ module deployAiGateway 'ai-gateway.bicep' = if (enableAiGatewayDeployment) {
     appClientId: appServiceManagedIdentity.properties.clientId
     applicationInsightsName: deployApplicationInsights.outputs.applicationInsightsName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    requireDepartmentSubscriptions: enableGatewayDepartmentAttribution
+    financeSubscriptionId: gatewayFinanceSubscriptionId
   }
 }
 
@@ -265,6 +269,7 @@ module deployWebApp 'web-app.bicep' = {
     aiAgentName: aiAgentName
     aiAgentVersion: aiAgentVersion
     aiGatewayProjectEndpoint: enableAiGatewayDeployment && routeAiThroughGateway ? deployAiGateway!.outputs.projectEndpoint : ''
+    gatewayDepartmentEnabled: enableAiGatewayDeployment && routeAiThroughGateway && enableGatewayDepartmentAttribution
     enableVnetIntegration: enablePrivateNetworking
     appServiceSubnetId: enablePrivateNetworking ? deployPrivateNetwork!.outputs.appServiceSubnetId : ''
   }

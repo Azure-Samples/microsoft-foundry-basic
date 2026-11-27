@@ -10,6 +10,8 @@ param projectName string
 param appClientId string
 param applicationInsightsName string
 param logAnalyticsWorkspaceName string
+param requireDepartmentSubscriptions bool = false
+param financeSubscriptionId string = ''
 
 resource insights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: applicationInsightsName
@@ -75,7 +77,7 @@ resource api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
     path: 'api/projects/${projectName}'
     protocols: ['https']
     serviceUrl: projectEndpoint
-    subscriptionRequired: false
+    subscriptionRequired: requireDepartmentSubscriptions
     type: 'http'
   }
 }
@@ -95,7 +97,7 @@ resource policy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: replace(replace(loadTextContent('ai-gateway-policy.xml'), '__TENANT_ID__', subscription().tenantId), '__APP_CLIENT_ID__', appClientId)
+    value: replace(replace(replace(loadTextContent('ai-gateway-policy.xml'), '__TENANT_ID__', subscription().tenantId), '__APP_CLIENT_ID__', appClientId), '__FINANCE_SUBSCRIPTION_ID__', financeSubscriptionId)
   }
 }
 
@@ -180,3 +182,16 @@ module monitoring 'ai-gateway-monitoring.bicep' = {
   dependsOn: [logger]
 }
 
+resource workbook 'Microsoft.Insights/workbooks@2023-06-01' = {
+  name: guid(gateway.id, 'usage-workbook')
+  location: location
+  kind: 'shared'
+  properties: {
+    displayName: 'AI Translator - gateway usage and cost'
+    category: 'workbook'
+    sourceId: insights.id
+    serializedData: replace(replace(replace(string(loadJsonContent('../dashboards/ai-gateway-workbook.json')), '__INSIGHTS_ID__', insights.id), '__WORKSPACE_ID__', logs.id), '__FINANCE_SUBSCRIPTION_ID__', financeSubscriptionId)
+  }
+}
+
+output workbookId string = workbook.id
