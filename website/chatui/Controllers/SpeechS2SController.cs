@@ -1,3 +1,5 @@
+extern alias AzureIdentity;
+
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Net.WebSockets;
@@ -5,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Azure.Core;
+using IdentityAuthenticationFailedException = AzureIdentity::Azure.Identity.AuthenticationFailedException;
 using chatui.Auth;
 using chatui.Configuration;
 using chatui.Services;
@@ -93,9 +96,22 @@ public class SpeechS2SController(
             await PumpClientAudioAsync(state, lifetime.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (WebSocketException ex)
+        catch (Exception ex) when (ex is WebSocketException or IOException or SocketException
+            or IdentityAuthenticationFailedException or Azure.RequestFailedException)
         {
-            logger.LogWarning(ex, "Realtime translation WebSocket session failed");
+            logger.LogError(ex, "Realtime translation session failed; required deployment: {Deployment}", TranslationDeployment);
+            try
+            {
+                await SendJsonAsync(clientWs, clientSendGate, new
+                {
+                    type = "error",
+                    message = "Realtime translation unavailable. Check the gpt-realtime-translate deployment, network connectivity, and managed-identity access.",
+                }, ct).ConfigureAwait(false);
+            }
+            catch (WebSocketException sendException)
+            {
+                logger.LogDebug(sendException, "Could not report translation failure to disconnected client");
+            }
         }
         finally
         {

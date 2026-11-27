@@ -22,9 +22,9 @@ var foundryName = contains(baseName, '-') ? 'ai-${baseName}' : 'aif${baseName}'
 
 // ---- Existing resources ----
 
-@description('Existing: Built-in Cognitive Services User role.')
-resource cognitiveServicesUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: 'a97b65f3-24c7-4388-baec-2e87135dc908'
+@description('Existing: Built-in Azure AI User role for Foundry project and agent data-plane operations.')
+resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
   scope: subscription()
 }
 
@@ -53,10 +53,10 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     networkAcls: {
       bypass: 'None'
       ipRules: []
-      defaultAction: 'Deny'
+      defaultAction: 'Allow'
       virtualNetworkRules: []
     }
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: 'Enabled'
   }
 
   @description('Models are managed at the account level. Deploy the GPT model that will be used for the Foundry agent logic.')
@@ -76,11 +76,31 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     }
   }
 
+  @description('Speech-to-speech model required by Start talking at /api/speech/translate-live.')
+  resource translationModel 'deployments' = {
+    name: 'gpt-realtime-translate'
+    dependsOn: [
+      model
+    ]
+    sku: {
+      capacity: 1
+      name: 'GlobalStandard'
+    }
+    properties: {
+      model: {
+        format: 'OpenAI'
+        name: 'gpt-realtime-translate'
+        version: '2026-05-06'
+      }
+      versionUpgradeOption: 'NoAutoUpgrade'
+    }
+  }
+
   @description('Realtime speech model used by the restricted English Training mode.')
   resource trainingModel 'deployments' = {
     name: 'gpt-realtime-2.1'
     dependsOn: [
-      model
+      translationModel
     ]
     sku: {
       capacity: 1
@@ -118,12 +138,12 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
 
 // Role assignments
 
-@description('Assign yourself to have access to the Foundry portal.')
-resource cognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundry.id, cognitiveServicesUserRole.id, foundryPortalUserPrincipalId)
+@description('Assign the deployer Azure AI User for Foundry portal and agent lifecycle operations.')
+resource azureAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundry.id, azureAiUserRole.id, foundryPortalUserPrincipalId)
   scope: foundry
   properties: {
-    roleDefinitionId: cognitiveServicesUserRole.id
+    roleDefinitionId: azureAiUserRole.id
     principalId: foundryPortalUserPrincipalId
     principalType: 'User'
   }

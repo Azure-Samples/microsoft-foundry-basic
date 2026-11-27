@@ -2,7 +2,7 @@
 // Vanilla ES modules; no build step. Integrates Azure Speech SDK for STT+MT
 // and Neural TTS, and the Azure Web PubSub client for meeting fan-out.
 
-import { GuidedTraining } from './training-guided.js?v=1';
+import { GuidedTraining } from './training-guided.js?v=2';
 
 const LANGUAGES = [
   { code: 'en', name: 'English',           stt: 'en-US', voice: 'en-US-EmmaMultilingualNeural', voices: { female: 'en-US-EmmaMultilingualNeural',  male: 'en-US-AndrewMultilingualNeural' } },
@@ -68,8 +68,10 @@ function loadMeetingPrefs() {
     const raw = localStorage.getItem(meetingPrefsKey());
     if (!raw) return { ttsEnabled: true, micDeviceId: null, recognitionMode: 's2s-realtime' };
     const parsed = JSON.parse(raw);
-    // Migrate legacy recognitionMode values — only S2S is supported now.
-    parsed.recognitionMode = 's2s-realtime';
+    // Migrate recognition modes that are no longer supported.
+    if (!['s2s-realtime', 'foundry-voice'].includes(parsed.recognitionMode)) {
+      parsed.recognitionMode = 's2s-realtime';
+    }
     delete parsed.candidates;
     return { ttsEnabled: true, micDeviceId: null, ...parsed };
   } catch { return { ttsEnabled: true, micDeviceId: null, recognitionMode: 's2s-realtime' }; }
@@ -981,6 +983,7 @@ let trainingStream = null;
 let trainingCaptureContext = null;
 let trainingPlaybackContext = null;
 let trainingWorklet = null;
+let trainingSilentSink = null;
 let trainingPlaybackAt = 0;
 let trainingCurrent = null;
 let trainingSignalTimer = null;
@@ -1033,6 +1036,8 @@ async function startTraining() {
   const button = document.getElementById('training-mic');
   const status = document.getElementById('training-status');
   const hint = document.getElementById('training-hint');
+  trainingPeak = 0;
+  trainingFramesReceived = 0;
   const micId = loadMeetingPrefs().micDeviceId;
   trainingStream = await navigator.mediaDevices.getUserMedia({
     audio: {
@@ -1055,6 +1060,9 @@ async function startTraining() {
   trainingWorklet = new AudioWorkletNode(trainingCaptureContext, 'pcm-processor');
   trainingWorklet.port.postMessage({ targetRate: 24000 });
   source.connect(trainingWorklet);
+  trainingSilentSink = trainingCaptureContext.createGain();
+  trainingSilentSink.gain.value = 0;
+  trainingWorklet.connect(trainingSilentSink).connect(trainingCaptureContext.destination);
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const query = new URLSearchParams();
@@ -1216,6 +1224,8 @@ async function finishTraining() {
   trainingWorklet.port.onmessage = null;
   trainingWorklet.disconnect();
   trainingWorklet = null;
+  trainingSilentSink?.disconnect();
+  trainingSilentSink = null;
   trainingStream?.getTracks().forEach(track => track.stop());
   trainingStream = null;
   await trainingCaptureContext.close();
@@ -1240,6 +1250,10 @@ async function stopTraining() {
     trainingWorklet.port.onmessage = null;
     try { trainingWorklet.disconnect(); } catch {}
     trainingWorklet = null;
+  }
+  if (trainingSilentSink) {
+    try { trainingSilentSink.disconnect(); } catch {}
+    trainingSilentSink = null;
   }
   trainingStream?.getTracks().forEach(track => track.stop());
   trainingStream = null;
@@ -1303,7 +1317,7 @@ function syncTalkControls() {
   // Recognition mode description
   const modeDesc = document.getElementById('talk-mode-desc');
   if (modeDesc) {
-    const modeId = prefs.recognitionMode ?? 'gpt-diarize';
+    const modeId = prefs.recognitionMode ?? 's2s-realtime';
     const meta = (typeof RECOGNITION_MODES !== 'undefined' && RECOGNITION_MODES.find(m => m.id === modeId));
     modeDesc.textContent = meta ? meta.title : 'Balanced (recommended)';
   }
@@ -1614,6 +1628,7 @@ let talkWs = null;
 let talkAudioCtx = null;
 let talkAudioStream = null;
 let talkWorkletNode = null;
+let talkSilentSink = null;
 const talkSpeakerColors = new Map(); // speakerId -> palette index
 
 async function startTalk({ recovering = false } = {}) {
@@ -1647,9 +1662,13 @@ async function startTalk({ recovering = false } = {}) {
   }
   if (sessionId !== talkSessionId) return;
 
-  const mode = 's2s-realtime';
+  const mode = loadMeetingPrefs().recognitionMode ?? 's2s-realtime';
   try {
-    await startTalkS2S(btn, hint, status, sessionId);
+    if (mode === 'foundry-voice') {
+      await startTalkServer(btn, hint, status, '/api/speech/voice-agent', {}, sessionId);
+    } else {
+      await startTalkS2S(btn, hint, status, sessionId);
+    }
   } catch (e) {
     if (sessionId !== talkSessionId) return;
     await stopTalk();
@@ -1660,16 +1679,15 @@ async function startTalk({ recovering = false } = {}) {
   }
 }
 
-// Only S2S mode is exposed now — the picker below is kept as a no-op stub in
-// case any UI still calls it.
 const RECOGNITION_MODES = [
   { id: 's2s-realtime', title: 'Ultra-fast voice (GPT S2S)', desc: 'GPT Realtime Translate — speech-in, speech-out. Bi-directional, sub-second latency.' },
+  { id: 'foundry-voice', title: 'Managed Foundry Voice', desc: 'Managed Voice Agent transcription with the existing translation and speech pipeline.' },
 ];
 
 async function openModeDialog() {
   const list = document.getElementById('mode-list');
   const dlg = document.getElementById('mode-dialog');
-  const current = loadMeetingPrefs().recognitionMode ?? 'gpt-diarize';
+  const current = loadMeetingPrefs().recognitionMode ?? 's2s-realtime';
   list.innerHTML = RECOGNITION_MODES.map(m => `
     <label class="lang-row${m.id === current ? ' selected' : ''}" data-id="${escapeAttr(m.id)}">
       <span class="lang-name">
@@ -1688,7 +1706,7 @@ async function openModeDialog() {
     label.querySelector('input').checked = true;
   };
   document.getElementById('mode-save').onclick = async () => {
-    const chosen = list.querySelector('input[name="mode-choice"]:checked')?.value ?? 'gpt-diarize';
+    const chosen = list.querySelector('input[name="mode-choice"]:checked')?.value ?? 's2s-realtime';
     saveMeetingPrefs({ recognitionMode: chosen });
     dlg.close();
     syncTalkControls();
@@ -1704,7 +1722,7 @@ async function openModeDialog() {
 }
 
 // ---------- Sprint 2: server-side ConversationTranscriber ----------
-async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/transcribe', extraQuery = {}) {
+async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/transcribe', extraQuery = {}, sessionId = talkSessionId) {
   const myLang = state.me.preferredLanguage;
   const prefs = loadMeetingPrefs();
   const chosen = (prefs.candidates && prefs.candidates.length > 0) ? prefs.candidates : [myLang];
@@ -1714,7 +1732,9 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
 
   // The GPT Realtime API requires 24 kHz PCM; Azure Speech
   // ConversationTranscriber uses 16 kHz. Pick per endpoint.
-  const targetSampleRate = endpointPath.includes('transcribe-gpt') ? 24000 : 16000;
+  const targetSampleRate = endpointPath.includes('transcribe-gpt') || endpointPath.includes('voice-agent')
+    ? 24000
+    : 16000;
 
   const micId = prefs.micDeviceId;
   const constraints = { audio: {
@@ -1722,7 +1742,12 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
     echoCancellation: true, noiseSuppression: true, autoGainControl: true,
     ...(micId ? { deviceId: { exact: micId } } : {}),
   } };
-  talkAudioStream = await navigator.mediaDevices.getUserMedia(constraints);
+  const audioStream = await navigator.mediaDevices.getUserMedia(constraints);
+  if (sessionId !== talkSessionId) {
+    audioStream.getTracks().forEach(t => t.stop());
+    return;
+  }
+  talkAudioStream = audioStream;
 
   const AC = window.AudioContext || window.webkitAudioContext;
   talkAudioCtx = new AC(); // let the browser choose its default (44.1 or 48 kHz)
@@ -1732,7 +1757,9 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
   // Configure the resampler for the endpoint's expected sample rate.
   talkWorkletNode.port.postMessage({ targetRate: targetSampleRate });
   src.connect(talkWorkletNode);
-  // Don't connect worklet to destination — no monitor loopback.
+  talkSilentSink = talkAudioCtx.createGain();
+  talkSilentSink.gain.value = 0;
+  talkWorkletNode.connect(talkSilentSink).connect(talkAudioCtx.destination);
 
   // Buffer any PCM frames that arrive BEFORE the WebSocket completes its
   // opening handshake. Otherwise the first ~200ms of audio (i.e. the very
@@ -1740,8 +1767,9 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
   let wsReady = false;
   const pending = [];
   talkWorkletNode.port.onmessage = (e) => {
-    if (wsReady && talkWs && talkWs.readyState === WebSocket.OPEN) {
-      talkWs.send(e.data);
+    if (sessionId !== talkSessionId) return;
+    if (wsReady && talkWs === ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(e.data);
     } else if (pending.length < 200) { // ~4 seconds max before we drop
       pending.push(e.data);
     }
@@ -1760,10 +1788,16 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
     qs.set('X-Dev-Lang', dev.lang);
   }
   const url = `${wsProto}//${location.host}${endpointPath}?${qs.toString()}`;
-  talkWs = new WebSocket(url);
-  talkWs.binaryType = 'arraybuffer';
+  const ws = new WebSocket(url);
+  talkWs = ws;
+  ws.binaryType = 'arraybuffer';
 
-  talkWs.onopen = () => {
+  ws.onopen = () => {
+    if (sessionId !== talkSessionId || talkWs !== ws) {
+      try { ws.close(1000, 'superseded'); } catch {}
+      return;
+    }
+    talkStarting = false;
     talkActive = true;
     wsReady = true;
     btn.querySelector('.mic-label').textContent = 'Stop talking';
@@ -1772,11 +1806,14 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
     hint.textContent = '🎙️ Listening… speak now.';
     startPitchTracker();
     // Flush anything the worklet captured before we finished the handshake.
+    void requestTalkWakeLock(sessionId);
+    void resumeTalkAudioContexts(sessionId);
     while (pending.length) {
-      try { talkWs.send(pending.shift()); } catch { break; }
+      try { ws.send(pending.shift()); } catch { break; }
     }
   };
-  talkWs.onmessage = async (ev) => {
+  ws.onmessage = async (ev) => {
+    if (sessionId !== talkSessionId || talkWs !== ws) return;
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'transcribing') {
@@ -1799,12 +1836,16 @@ async function startTalkServer(btn, hint, status, endpointPath = '/api/speech/tr
       stopTalk();
     }
   };
-  talkWs.onerror = (e) => {
-    console.warn('[Talk] WebSocket error:', e);
+  ws.onerror = (e) => {
+    if (sessionId === talkSessionId && talkWs === ws) {
+      console.warn('[Talk] WebSocket error:', e);
+    }
     // Fall through — onclose will fire and clean up.
   };
-  talkWs.onclose = () => {
-    if (talkActive) stopTalk();
+  ws.onclose = () => {
+    if (sessionId === talkSessionId && talkWs === ws && (talkActive || talkStarting)) {
+      void stopTalk();
+    }
   };
 }
 
@@ -1896,6 +1937,9 @@ async function startTalkS2S(btn, hint, status, sessionId) {
   talkWorkletNode = new AudioWorkletNode(talkAudioCtx, 'pcm-processor');
   talkWorkletNode.port.postMessage({ targetRate: 24000 });
   src.connect(talkWorkletNode);
+  talkSilentSink = talkAudioCtx.createGain();
+  talkSilentSink.gain.value = 0;
+  talkWorkletNode.connect(talkSilentSink).connect(talkAudioCtx.destination);
 
   // Separate AudioContext for playback so its scheduling isn't tied to the
   // capture context (which prevents echo/loop feedback on some devices).
@@ -1957,6 +2001,7 @@ async function startTalkS2S(btn, hint, status, sessionId) {
   const ws = new WebSocket(url);
   talkWs = ws;
   ws.binaryType = 'arraybuffer';
+  let connectionError = '';
 
   ws.onopen = () => {
     if (sessionId !== talkSessionId || talkWs !== ws) {
@@ -2018,8 +2063,9 @@ async function startTalkS2S(btn, hint, status, sessionId) {
       hint.textContent = `🎙️ ${langName(myLang)} ↔ ${langName(reply)}`;
     } else if (msg.type === 'error') {
       console.warn('[S2S] upstream error:', msg.message);
+      connectionError = msg.message || 'Realtime translation failed.';
       const h = document.getElementById('talk-hint');
-      if (h) h.textContent = '⚠️ ' + (msg.message || 'transient error');
+      if (h) h.textContent = '⚠️ ' + connectionError;
     }
   };
   ws.onerror = (e) => {
@@ -2027,10 +2073,12 @@ async function startTalkS2S(btn, hint, status, sessionId) {
       console.warn('[S2S] WebSocket error:', e);
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     if (sessionId !== talkSessionId || talkWs !== ws) return;
-    talkStarting = false;
-    if (talkActive) void stopTalk();
+    console.warn('[S2S] WebSocket closed:', event.code, event.reason);
+    const message = connectionError || 'Translation connection closed. Please try again; if it persists, check the server logs.';
+    void stopTalk({ errorMessage: message });
+    toast(message, 'error');
   };
 }
 
@@ -2389,7 +2437,7 @@ async function startTalkClientSdk(btn, hint, status) {
     );
 }
 
-async function stopTalk({ interrupted = false } = {}) {
+async function stopTalk({ interrupted = false, errorMessage = '' } = {}) {
   ++talkSessionId;
   talkStarting = false;
   talkActive = false;
@@ -2399,10 +2447,10 @@ async function stopTalk({ interrupted = false } = {}) {
   const btn = document.getElementById('talk-mic');
   btn.querySelector('.mic-label').textContent = 'Start talking';
   btn.classList.remove('recording');
-  document.getElementById('talk-status').textContent = interrupted ? 'Paused' : 'Idle';
-  document.getElementById('talk-hint').textContent = interrupted
+  document.getElementById('talk-status').textContent = errorMessage ? 'Connection failed' : interrupted ? 'Paused' : 'Idle';
+  document.getElementById('talk-hint').textContent = errorMessage || (interrupted
     ? 'Translation paused while the app was in the background.'
-    : 'Press Start talking and grant microphone access.';
+    : 'Press Start talking and grant microphone access.');
   if (rec) {
     try { rec.stopContinuousRecognitionAsync(() => rec.close(), () => rec.close()); } catch {}
   }
@@ -2425,6 +2473,10 @@ async function stopTalk({ interrupted = false } = {}) {
   if (talkWorkletNode) {
     try { talkWorkletNode.port.onmessage = null; talkWorkletNode.disconnect(); } catch {}
     talkWorkletNode = null;
+  }
+  if (talkSilentSink) {
+    try { talkSilentSink.disconnect(); } catch {}
+    talkSilentSink = null;
   }
   if (talkAudioCtx) {
     try { await talkAudioCtx.close(); } catch {}

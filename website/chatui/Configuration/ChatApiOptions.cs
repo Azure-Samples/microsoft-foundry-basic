@@ -21,4 +21,8 @@ public class ChatApiOptions
 
     [Required]
     public string AIAgentVersion { get; init; } = default!;
+
+    public bool FoundryVoiceEnabled { get; init; }
+
+    public string? FoundryVoiceAgentName { get; init; }
 }

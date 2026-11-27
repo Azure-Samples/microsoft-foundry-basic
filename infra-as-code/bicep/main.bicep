@@ -42,6 +42,12 @@ param enablePrivateNetworking bool = true
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
 
+@description('Expose the managed Foundry Prompt Voice transcription path in the web application.')
+param foundryVoiceEnabled bool = true
+
+@description('Managed Foundry Prompt Voice agent name.')
+param foundryVoiceAgentName string = 'agent-aitr-prod-swe-001'
+
 @description('Provision the billable Standard v2 AI gateway. Traffic routing is controlled separately.')
 param enableAiGateway bool = false
 
@@ -268,6 +274,8 @@ module deployWebApp 'web-app.bicep' = {
     trainingMemberObjectId: yourPrincipalId
     aiAgentName: aiAgentName
     aiAgentVersion: aiAgentVersion
+    foundryVoiceEnabled: foundryVoiceEnabled
+    foundryVoiceAgentName: foundryVoiceAgentName
     aiGatewayProjectEndpoint: enableAiGatewayDeployment && routeAiThroughGateway ? deployAiGateway!.outputs.projectEndpoint : ''
     gatewayDepartmentEnabled: enableAiGatewayDeployment && routeAiThroughGateway && enableGatewayDepartmentAttribution
     enableVnetIntegration: enablePrivateNetworking

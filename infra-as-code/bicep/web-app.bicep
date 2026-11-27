@@ -75,6 +75,8 @@ param enableVnetIntegration bool = true
 param appServiceSubnetId string = ''
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
+param foundryVoiceEnabled bool = false
+param foundryVoiceAgentName string = ''
 param aiGatewayProjectEndpoint string = ''
 param gatewayDepartmentEnabled bool = false
 
@@ -267,6 +269,8 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
       AIAgentId: aiAgentName
       AIAgentVersion: aiAgentVersion
+      ChatApi__FoundryVoiceEnabled: string(foundryVoiceEnabled)
+      ChatApi__FoundryVoiceAgentName: foundryVoiceAgentName
       Translator__Endpoint: 'https://${translator.properties.customSubDomainName}.cognitiveservices.azure.com/'
       Translator__Region: translator.location
       Speech__Endpoint: 'https://${speech.properties.customSubDomainName}.cognitiveservices.azure.com/'

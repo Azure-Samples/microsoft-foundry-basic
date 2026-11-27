@@ -185,6 +185,9 @@ export class GuidedTraining {
       this.socket.send(event.data);
     };
     source.connect(worklet);
+    this.silentSink = context.createGain();
+    this.silentSink.gain.value = 0;
+    worklet.connect(this.silentSink).connect(context.destination);
     this.send('attempt.record');
   }
 
@@ -243,6 +246,7 @@ export class GuidedTraining {
   async stopCapture() {
     clearTimeout(this.recordTimer);
     if (this.worklet) { this.worklet.port.onmessage = null; this.worklet.disconnect(); this.worklet = null; }
+    if (this.silentSink) { this.silentSink.disconnect(); this.silentSink = null; }
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
     const context = this.captureContext;

@@ -25,6 +25,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOptions<ChatApiOptions>()
     .Bind(builder.Configuration)
     .ValidateDataAnnotations()
+    .Validate(options => !options.FoundryVoiceEnabled
+        || !string.IsNullOrWhiteSpace(options.FoundryVoiceAgentName),
+        "FoundryVoiceAgentName is required when Foundry Voice is enabled.")
     .ValidateOnStart();
 
 builder.Services.AddOptions<TableStorageOptions>()
