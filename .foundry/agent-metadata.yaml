@@ -1,0 +1,6 @@
+defaultEnvironment: prod
+environments:
+  prod:
+    azd:
+      environmentName: prod
+      service: translator-voice

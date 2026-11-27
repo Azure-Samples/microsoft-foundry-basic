@@ -321,6 +321,7 @@ paket-files/
 *.local.env
 .env.local
 .env
+.azure/
 
 # FAKE - F# Make
 .fake/

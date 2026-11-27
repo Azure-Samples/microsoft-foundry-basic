@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "swedencentral"
+    },
+    "resourceGroupName": {
+      "value": "rg-aitr-prod-swe-001"
+    },
+    "deployerPrincipalId": {
+      "value": "39774886-9396-4826-b38d-b79c0dcc581a"
+    },
+    "deployerPrincipalDisplayName": {
+      "value": "Sergey Pechenkin"
+    }
+  }
+}

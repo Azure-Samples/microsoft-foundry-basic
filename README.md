@@ -84,6 +84,12 @@ Free Practice treats Start through Stop as one recording, including pauses. Stop
 entire recording for one English translation or correction and spoken response. The original
 transcript appears after Stop in one message; playback finishes before the next recording.
 
+Start talking requires the `gpt-realtime-translate` deployment in the Foundry account, in
+addition to `gpt-live-transcribe`. Successful browser sign-in and microphone permission do
+not verify this upstream connection. If capture stops immediately, check the connection
+error shown in the UI and the server's `Realtime translation session failed` log entry for
+deployment, managed-identity, or network failures.
+
 The September 2026 private deployment passed runtime managed-identity checks for PostgreSQL,
 Translator, Key Vault, Speech synthesis, Web PubSub, Foundry summarisation, and the Training
 realtime connection. Speech SDK 1.51.2 is required by this verified build; 1.43.0 failed in the

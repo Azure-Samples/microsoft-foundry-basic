@@ -12,7 +12,7 @@
               "settings": {
                 "content": {
                   "settings": {
-                    "content": "## AI Translator — cost & health\n\n**Live:** [app-aitr7631](https://app-aitr7631-aphxamaxhygbdxek.swedencentral-01.azurewebsites.net) · **App Insights:** appi-aitr7631 · **Region:** Sweden Central\n\nMetrics `aitr.*` come from OpenTelemetry (Azure Monitor Distro). Dependencies `translate`, `tts.synth`, `foundry.*` are OTel spans.",
+                    "content": "## AI Translator — cost & health\n\n**App Insights:** appi-aitr-dev-swe-001 · **Region:** Sweden Central\n\nMetrics `aitr.*` come from OpenTelemetry (Azure Monitor Distro). Dependencies `translate`, `tts.synth`, `foundry.*` are OTel spans.",
                     "title": "",
                     "subtitle": "",
                     "markdownSource": 1
@@ -28,8 +28,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "25e68f10-165e-406c-8885-20b709434cd3", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -55,8 +55,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "309c543c-645c-4d8b-ac01-aa2f77f81ceb", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -82,8 +82,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "506f217d-6929-44cf-a763-d4a86615ac78", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -109,8 +109,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "028eda9d-7653-4c67-947a-b8f04aa072b2", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -134,8 +134,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "289f3662-b2bf-447a-8a82-77681d8b5fe9", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -161,8 +161,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "986ae4ef-0cbc-4e6e-86d3-aff36418bcd2", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },
@@ -186,8 +186,8 @@
               "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
               "inputs": [
                 { "name": "resourceTypeMode", "value": "components", "isOptional": true },
-                { "name": "ComponentId", "value": { "SubscriptionId": "d499a328-d498-40e0-8882-2e0a1eb904d2", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr7631", "ResourceId": "/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631" }, "isOptional": true },
-                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/d499a328-d498-40e0-8882-2e0a1eb904d2/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr7631"] }, "isOptional": true },
+                { "name": "ComponentId", "value": { "SubscriptionId": "e7ff8a97-0379-4120-a316-2e4b84a181a5", "ResourceGroup": "rg-ai-translator-dev-swe-001", "Name": "appi-aitr-dev-swe-001", "ResourceId": "/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001" }, "isOptional": true },
+                { "name": "Scope", "value": { "resourceIds": ["/subscriptions/e7ff8a97-0379-4120-a316-2e4b84a181a5/resourceGroups/rg-ai-translator-dev-swe-001/providers/microsoft.insights/components/appi-aitr-dev-swe-001"] }, "isOptional": true },
                 { "name": "PartId", "value": "9843da43-53c5-4346-a874-278ea068cef7", "isOptional": true },
                 { "name": "Version", "value": "2.0", "isOptional": true },
                 { "name": "TimeRange", "value": "P1D", "isOptional": true },

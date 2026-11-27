@@ -6,6 +6,7 @@ Last updated: 2026-11-19
 
 Companion documents:
 - `README.md` — deployment and operations guide.
+- `spec.md` — consumer identity and Table Storage requirements.
 - `../infra-as-code/bicep/` — Bicep modules for Foundry, Translator, Speech, Table Storage, Web PubSub, Key Vault, and App Service.
 
 This document specifies **only the workload-specific contract**: database schema, REST API, Web PubSub protocol, join-token structure, and the end-to-end flows. Infra decisions are documented inline in each `*.bicep` module.
