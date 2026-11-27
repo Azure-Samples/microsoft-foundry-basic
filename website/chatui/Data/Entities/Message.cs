@@ -1,11 +1,8 @@
-using Pgvector;
-
 namespace chatui.Data.Entities;
 
 /// <summary>
 /// A single personal-chat message: original in the sender's language plus one
-/// pre-computed translation targeted at the recipient's language. Embedding is
-/// optional, back-filled asynchronously for semantic search over history.
+/// pre-computed translation targeted at the recipient's language.
 /// </summary>
 public class Message
 {
@@ -22,8 +19,6 @@ public class Message
     public string Original { get; set; } = default!;
 
     public string Translated { get; set; } = default!;
-
-    public Vector? Embedding { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

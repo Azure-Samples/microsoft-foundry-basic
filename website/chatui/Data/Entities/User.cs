@@ -1,15 +1,21 @@
 namespace chatui.Data.Entities;
 
 /// <summary>
-/// A person signed into the workload via App Service Easy Auth (Entra ID).
-/// The row must exist before the person can use the workload.
+/// A person signed into the workload through an allowed App Service identity provider.
+/// The profile must exist or be created from an explicit invitation.
 /// </summary>
 public class User
 {
     public Guid Id { get; set; }
 
-    /// <summary>Object ID from the Easy Auth principal (aka Entra oid).</summary>
-    public string EntraObjectId { get; set; } = default!;
+    public string Provider { get; set; } = default!;
+
+    public string Subject { get; set; } = default!;
+
+    public string Issuer { get; set; } = default!;
+
+    /// <summary>Compatibility value for migrated Microsoft training memberships.</summary>
+    public string EntraObjectId { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = default!;
 

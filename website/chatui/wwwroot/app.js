@@ -2557,7 +2557,7 @@ async function boot() {
       return;
     }
     if (e instanceof ApiError && e.code === 'user_not_provisioned') {
-      document.getElementById('access-denied-message').textContent = 'The selected demo user does not exist.';
+      document.getElementById('access-denied-message').textContent = 'This account has not been invited. Sign out and use an invited account, or contact the application operator.';
       show('access-denied');
       return;
     }

@@ -19,6 +19,9 @@ param baseName string
 @minLength(4)
 param logAnalyticsWorkspaceName string
 
+@description('Use private endpoints and disable public network access.')
+param enablePrivateNetworking bool = true
+
 var translatorName = contains(baseName, '-') ? 'trans-${baseName}' : 'trans${baseName}'
 
 // ---- Existing resources ----
@@ -43,7 +46,7 @@ resource translator 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   properties: {
     customSubDomainName: translatorName
     disableLocalAuth: true
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
   }
 }
 

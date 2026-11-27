@@ -47,9 +47,12 @@ fi
 PRINCIPAL_ID=$(az rest --subscription "$SUBSCRIPTION_ID" --url 'https://graph.microsoft.com/v1.0/me' --query id -o tsv | tr -d '\r')
 PRINCIPAL_NAME=$(az rest --subscription "$SUBSCRIPTION_ID" --url 'https://graph.microsoft.com/v1.0/me' --query userPrincipalName -o tsv | tr -d '\r')
 
-# Optional Entra ID app registration client ID for App Service Easy Auth v2.
-# Leave empty on first deploy; set once the app registration exists and redeploy.
-ENTRA_APP_CLIENT_ID="${ENTRA_APP_CLIENT_ID:-}"
+MICROSOFT_CLIENT_ID="${MICROSOFT_CLIENT_ID:-}"
+MICROSOFT_CLIENT_SECRET_NAME="${MICROSOFT_CLIENT_SECRET_NAME:-microsoft-login-client-secret}"
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+GOOGLE_CLIENT_SECRET_NAME="${GOOGLE_CLIENT_SECRET_NAME:-google-login-client-secret}"
+RETAIN_POSTGRES="${RETAIN_POSTGRES:-true}"
+ENABLE_PRIVATE_NETWORKING="${ENABLE_PRIVATE_NETWORKING:-true}"
 
 # This takes about 15-20 minutes to run.
 DEPLOY_ARGS=(
@@ -58,7 +61,12 @@ DEPLOY_ARGS=(
   --resource-group "$RESOURCE_GROUP"
   --parameters "baseName=$BASE_NAME" "location=$LOCATION"
   "yourPrincipalId=$PRINCIPAL_ID" "yourPrincipalDisplayName=$PRINCIPAL_NAME"
-  "entraAppClientId=$ENTRA_APP_CLIENT_ID"
+  "microsoftClientId=$MICROSOFT_CLIENT_ID"
+  "microsoftClientSecretName=$MICROSOFT_CLIENT_SECRET_NAME"
+  "googleClientId=$GOOGLE_CLIENT_ID"
+  "googleClientSecretName=$GOOGLE_CLIENT_SECRET_NAME"
+  "retainPostgres=$RETAIN_POSTGRES"
+  "enablePrivateNetworking=$ENABLE_PRIVATE_NETWORKING"
 )
 az deployment group what-if "${DEPLOY_ARGS[@]}"
 az deployment group create "${DEPLOY_ARGS[@]}"

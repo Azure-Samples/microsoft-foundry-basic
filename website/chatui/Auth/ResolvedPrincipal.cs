@@ -6,7 +6,9 @@ namespace chatui.Auth;
 /// or from the local <see cref="DevAuthOptions"/> override.
 /// </summary>
 public sealed record ResolvedPrincipal(
-    string EntraObjectId,
+    string Provider,
+    string Subject,
+    string Issuer,
     string DisplayName,
     string Email,
     string? PreferredLanguage);

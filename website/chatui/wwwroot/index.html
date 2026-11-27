@@ -22,7 +22,7 @@
 
   <link rel="stylesheet" href="/style.css?v=52" />
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
-  <script type="module" src="/app.js?v=53" defer></script>
+  <script type="module" src="/app.js?v=54" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -36,6 +36,7 @@
       <span id="me-name"></span>
       <span class="muted small">My language</span>
       <select id="me-language" title="Your language for bidirectional translation" aria-label="My language"></select>
+      <a class="btn" href="/.auth/logout?post_logout_redirect_uri=/">Sign out</a>
     </div>
   </header>
 
@@ -48,8 +49,11 @@
 
     <section class="screen" id="screen-signin" hidden>
       <h1>Sign in required</h1>
-      <p>You need to sign in with your work account to use the translator.</p>
-      <a class="btn primary" href="/.auth/login/aad?post_login_redirect_uri=/">Sign in with Microsoft</a>
+      <p>Sign in with an invited Microsoft or Google account to use the translator.</p>
+      <div class="actions">
+        <a class="btn primary" href="/.auth/login/aad?post_login_redirect_uri=/">Sign in with Microsoft</a>
+        <a class="btn" href="/.auth/login/google?post_login_redirect_uri=/">Sign in with Google</a>
+      </div>
       <details class="muted">
         <summary>Or configure DevAuth (developers)</summary>
         <p class="hint">Set <code>DevAuth__Enabled=true</code> and related values in <code>appsettings.Development.json</code> or App Service settings.</p>
@@ -57,8 +61,9 @@
     </section>
 
     <section class="screen" id="screen-access-denied" hidden>
-      <h1>Demo user required</h1>
-      <p id="access-denied-message">Specify an existing demo user in the URL.</p>
+      <h1>Access not provisioned</h1>
+      <p id="access-denied-message">This account cannot access the application.</p>
+      <a class="btn" href="/.auth/logout?post_logout_redirect_uri=/">Sign out</a>
     </section>
 
     <section class="screen" id="screen-load-error" hidden>

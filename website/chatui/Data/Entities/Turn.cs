@@ -1,5 +1,3 @@
-using Pgvector;
-
 namespace chatui.Data.Entities;
 
 /// <summary>
@@ -23,8 +21,6 @@ public class Turn
     public string SourceLang { get; set; } = default!;
 
     public string Original { get; set; } = default!;
-
-    public Vector? Embedding { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

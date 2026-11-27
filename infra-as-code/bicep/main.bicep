@@ -18,11 +18,27 @@ param yourPrincipalId string
 @minLength(1)
 param yourPrincipalDisplayName string = 'deployer'
 
-@description('Optional: Entra ID application (client) ID used to enable App Service Easy Auth v2. Leave empty to skip Easy Auth wiring for now.')
-param entraAppClientId string = ''
+@description('Microsoft identity application client ID. Configure the app registration for organizational and personal Microsoft accounts.')
+param microsoftClientId string = ''
 
-@description('Optional: allowed audience for Easy Auth tokens. Defaults to api://<entraAppClientId>.')
-param entraAppAllowedAudience string = ''
+@description('Optional allowed audience for Microsoft identity tokens. Defaults to api://<microsoftClientId>.')
+param microsoftAllowedAudience string = ''
+
+@description('Google OAuth application client ID.')
+param googleClientId string = ''
+
+@description('Key Vault secret name containing the Microsoft identity application client secret.')
+param microsoftClientSecretName string = 'microsoft-login-client-secret'
+
+@description('Key Vault secret name containing the Google OAuth application client secret.')
+param googleClientSecretName string = 'google-login-client-secret'
+
+@description('Retain PostgreSQL while user profiles are migrated and verified. Set false only after the migration cutover gate passes.')
+param retainPostgres bool = true
+
+@description('Deploy private endpoints and App Service VNet integration. Disable for public endpoints secured by TLS, managed identity, and RBAC.')
+param enablePrivateNetworking bool = true
+
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
 
@@ -49,8 +65,8 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02
     workspaceCapping: {
       dailyQuotaGb: 10 // Production readiness change: In production, tune this value to ensure operational logs are collected, but a reasonable cap is set.
     }
-    publicNetworkAccessForIngestion: 'Disabled'
-    publicNetworkAccessForQuery: 'Disabled'
+    publicNetworkAccessForIngestion: enablePrivateNetworking ? 'Disabled' : 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
   }
 }
 
@@ -106,6 +122,7 @@ module deployTranslator 'translator.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    enablePrivateNetworking: enablePrivateNetworking
   }
 }
 
@@ -117,6 +134,7 @@ module deploySpeech 'speech.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    enablePrivateNetworking: enablePrivateNetworking
   }
 }
 
@@ -128,6 +146,7 @@ module deployWebPubSub 'web-pubsub.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    enablePrivateNetworking: enablePrivateNetworking
   }
 }
 
@@ -141,11 +160,12 @@ module deployKeyVault 'key-vault.bicep' = {
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     deployerPrincipalId: yourPrincipalId
     appServicePrincipalId: appServiceManagedIdentity.properties.principalId
+    enablePrivateNetworking: enablePrivateNetworking
   }
 }
 
-@description('PostgreSQL Flexible Server with pgvector — application data, per-user history, and meeting transcripts.')
-module deployPostgres 'postgres.bicep' = {
+@description('PostgreSQL retained temporarily as the migration source. Disable only after Table Storage migration verification and rollback validation.')
+module deployPostgres 'postgres.bicep' = if (retainPostgres) {
   scope: resourceGroup()
   name: 'postgresDeploy'
   params: {
@@ -161,7 +181,19 @@ module deployPostgres 'postgres.bicep' = {
 
 // Deploy the Azure Web App resources for the chat UI.
 
-module deployPrivateNetwork 'private-network.bicep' = {
+@description('Azure Table Storage for provider-aware user profiles and invitations.')
+module deployTableStorage 'storage-tables.bicep' = {
+  name: 'tableStorageDeploy'
+  params: {
+    baseName: baseName
+    location: location
+    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
+    appServicePrincipalId: appServiceManagedIdentity.properties.principalId
+    enablePrivateNetworking: enablePrivateNetworking
+  }
+}
+
+module deployPrivateNetwork 'private-network.bicep' = if (enablePrivateNetworking) {
   name: 'privateNetworkDeploy'
   params: {
     baseName: baseName
@@ -170,14 +202,15 @@ module deployPrivateNetwork 'private-network.bicep' = {
     speechName: deploySpeech.outputs.speechName
     translatorName: deployTranslator.outputs.translatorName
     keyVaultName: deployKeyVault.outputs.keyVaultName
-    postgresName: deployPostgres.outputs.pgServerName
+    postgresName: retainPostgres ? deployPostgres!.outputs.pgServerName : ''
+    storageAccountName: deployTableStorage.outputs.storageAccountName
     webPubSubName: deployWebPubSub.outputs.webPubSubName
     applicationInsightsName: deployApplicationInsights.outputs.applicationInsightsName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
   }
 }
 
-@description('Deploy the web app for the front end demo UI. The web application will call into the Foundry Agent Service, Translator, Speech, Web PubSub, and Postgres — all via managed identity.')
+@description('Deploy the web app with managed identity access to private workload services.')
 module deployWebApp 'web-app.bicep' = {
   scope: resourceGroup()
   name: 'webAppDeploy'
@@ -192,15 +225,20 @@ module deployWebApp 'web-app.bicep' = {
     existingSpeechResourceName: deploySpeech.outputs.speechName
     existingWebPubSubResourceName: deployWebPubSub.outputs.webPubSubName
     existingKeyVaultUri: deployKeyVault.outputs.keyVaultUri
-    existingPostgresFqdn: deployPostgres.outputs.pgServerFqdn
-    existingPostgresDatabase: deployPostgres.outputs.pgDatabaseName
+    tableStorageEndpoint: deployTableStorage.outputs.tableEndpoint
+    usersTableName: deployTableStorage.outputs.usersTableName
+    userInvitesTableName: deployTableStorage.outputs.userInvitesTableName
     existingAppServiceManagedIdentityName: appServiceManagedIdentity.name
-    entraAppClientId: entraAppClientId
-    entraAppAllowedAudience: entraAppAllowedAudience
+    microsoftClientId: microsoftClientId
+    microsoftAllowedAudience: microsoftAllowedAudience
+    googleClientId: googleClientId
+    microsoftClientSecretName: microsoftClientSecretName
+    googleClientSecretName: googleClientSecretName
     trainingMemberObjectId: yourPrincipalId
     aiAgentName: aiAgentName
     aiAgentVersion: aiAgentVersion
-    appServiceSubnetId: deployPrivateNetwork.outputs.appServiceSubnetId
+    enableVnetIntegration: enablePrivateNetworking
+    appServiceSubnetId: enablePrivateNetworking ? deployPrivateNetwork!.outputs.appServiceSubnetId : ''
   }
 }
 
@@ -217,14 +255,15 @@ module customerUsageAttributionModule 'customerUsageAttribution/cuaIdResourceGro
 @description('Post-deploy hint: seed the JWT signing secret into Key Vault before the app can issue meeting join tokens.')
 output postDeployHintKeyVault string = 'az keyvault secret set --vault-name ${deployKeyVault.outputs.keyVaultName} --name join-token-signing-key --value "$(openssl rand -base64 64)"'
 
-@description('Post-deploy hint: connect to Postgres with your Entra token to run the CREATE EXTENSION vector + migrations.')
-output postDeployHintPostgres string = 'PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv) psql "host=${deployPostgres.outputs.pgServerFqdn} dbname=${deployPostgres.outputs.pgDatabaseName} user=${yourPrincipalDisplayName} sslmode=require" -c "CREATE EXTENSION IF NOT EXISTS vector;"'
+@description('Post-deploy hint for the temporary PostgreSQL migration source.')
+output postDeployHintPostgres string = retainPostgres ? 'PostgreSQL is retained for migration. Run the user migration tool and verify counts before setting retainPostgres=false.' : 'PostgreSQL deployment is disabled after migration cutover.'
 
 output appName string = deployWebApp.outputs.appName
 output appHostname string = deployWebApp.outputs.appHostname
 output managedIdentityClientId string = appServiceManagedIdentity.properties.clientId
 output managedIdentityPrincipalId string = appServiceManagedIdentity.properties.principalId
 output foundryName string = deployFoundry.outputs.foundryName
-output postgresName string = deployPostgres.outputs.pgServerName
+output postgresName string = retainPostgres ? deployPostgres!.outputs.pgServerName : ''
+output storageAccountName string = deployTableStorage.outputs.storageAccountName
 output keyVaultName string = deployKeyVault.outputs.keyVaultName
 

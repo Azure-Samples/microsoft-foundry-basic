@@ -5,12 +5,12 @@ using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.AI.Extensions.OpenAI;
 using Azure.Core;
+using Azure.Data.Tables;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry;
 using chatui.Configuration;
 using chatui.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.CognitiveServices.Speech;
 using System.Net.WebSockets;
@@ -25,8 +25,13 @@ internal static class ServiceInitialization
         using var lifetime = new CancellationTokenSource(TimeSpan.FromMinutes(4));
         using var scope = services.CreateScope();
         var provider = scope.ServiceProvider;
-        var users = await provider.GetRequiredService<TranslatorDbContext>().Users.CountAsync(lifetime.Token);
-        Console.WriteLine($"VERIFY database users={users}");
+        var tableOptions = provider.GetRequiredService<IOptions<TableStorageOptions>>().Value;
+        var usersTable = provider.GetRequiredService<TableServiceClient>().GetTableClient(tableOptions.UsersTableName);
+        await foreach (var _ in usersTable.QueryAsync<TableEntity>(maxPerPage: 1, cancellationToken: lifetime.Token))
+        {
+            break;
+        }
+        Console.WriteLine("VERIFY table storage passed");
         var translation = await provider.GetRequiredService<TranslatorService>()
             .TranslateAsync("Hello", "ru", "en", lifetime.Token);
         if (string.IsNullOrWhiteSpace(translation.TranslatedText)) throw new InvalidOperationException("Empty translation.");
@@ -91,8 +96,10 @@ internal static class ServiceInitialization
         }
         using var lifetime = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var vault = new SecretClient(new Uri(input.VaultUri), new BootstrapCredential(input.VaultToken));
-        if (!string.IsNullOrEmpty(input.LoginSecret))
-            await vault.SetSecretAsync("entra-login-client-secret", input.LoginSecret, lifetime.Token);
+        if (!string.IsNullOrEmpty(input.MicrosoftLoginSecret))
+            await vault.SetSecretAsync("microsoft-login-client-secret", input.MicrosoftLoginSecret, lifetime.Token);
+        if (!string.IsNullOrEmpty(input.GoogleLoginSecret))
+            await vault.SetSecretAsync("google-login-client-secret", input.GoogleLoginSecret, lifetime.Token);
         try
         {
             await vault.GetSecretAsync("join-token-signing-key", cancellationToken: lifetime.Token);
@@ -117,8 +124,14 @@ internal static class ServiceInitialization
         Console.WriteLine("Agent private invocation passed.");
     }
 
-    private sealed record ServiceInput(string VaultUri, string VaultToken, string? LoginSecret,
-        string ProjectEndpoint, string FoundryToken, AgentInput Agent);
+    private sealed record ServiceInput(
+        string VaultUri,
+        string VaultToken,
+        string? MicrosoftLoginSecret,
+        string? GoogleLoginSecret,
+        string ProjectEndpoint,
+        string FoundryToken,
+        AgentInput Agent);
     private sealed record AgentInput(string Name, string Model, string Instructions);
 
     private sealed class BootstrapCredential(string token) : TokenCredential

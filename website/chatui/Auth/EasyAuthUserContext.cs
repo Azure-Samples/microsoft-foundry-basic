@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using chatui.Data;
 using chatui.Data.Entities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace chatui.Auth;
@@ -20,7 +19,7 @@ namespace chatui.Auth;
 /// </summary>
 public sealed class EasyAuthUserContext(
     IHttpContextAccessor httpContextAccessor,
-    TranslatorDbContext dbContext,
+    IUserProfileStore profiles,
     IHostEnvironment environment,
     IOptions<DevAuthOptions> devAuthOptions,
     ILogger<EasyAuthUserContext> logger) : IUserContext
@@ -32,11 +31,14 @@ public sealed class EasyAuthUserContext(
     private const string DevLangHeader  = "X-Dev-Lang";
 
     // Claim types Easy Auth surfaces. The v2 endpoint uses full OIDC URIs.
-    private static readonly string[] ObjectIdClaimTypes =
+    private static readonly string[] MicrosoftObjectIdClaimTypes =
     [
         "http://schemas.microsoft.com/identity/claims/objectidentifier",
         "oid",
     ];
+
+    private static readonly string[] SubjectClaimTypes = ["sub"];
+    private static readonly string[] IssuerClaimTypes = ["iss"];
 
     private static readonly string[] EmailClaimTypes =
     [
@@ -56,20 +58,13 @@ public sealed class EasyAuthUserContext(
     {
         var principal = ResolvePrincipal();
 
-        var existing = await dbContext.Users
-            .FirstOrDefaultAsync(u => u.EntraObjectId == principal.EntraObjectId, cancellationToken)
-            .ConfigureAwait(false);
-
+        var existing = await profiles.GetOrClaimAsync(principal, cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {
             return existing;
         }
 
-        logger.LogWarning(
-            "Rejected unprovisioned user with Entra oid {EntraObjectId} ({DisplayName})",
-            principal.EntraObjectId,
-            principal.DisplayName);
-
+        logger.LogWarning("Rejected an authenticated but uninvited {Provider} user.", principal.Provider);
         throw new UserNotProvisionedException();
     }
 
@@ -95,7 +90,13 @@ public sealed class EasyAuthUserContext(
                 var name = string.IsNullOrWhiteSpace(HeaderOrQuery(DevNameHeader)) ? oid : HeaderOrQuery(DevNameHeader);
                 var email = HeaderOrQuery(DevEmailHeader);
                 var lang = string.IsNullOrWhiteSpace(HeaderOrQuery(DevLangHeader)) ? "en" : HeaderOrQuery(DevLangHeader);
-                return new ResolvedPrincipal(oid, name, email, lang);
+                return new ResolvedPrincipal(
+                    IdentityProviders.Microsoft,
+                    oid,
+                    "development",
+                    name,
+                    email,
+                    lang);
             }
 
             throw new DevPersonaRequiredException();
@@ -110,7 +111,7 @@ public sealed class EasyAuthUserContext(
             "Missing X-MS-CLIENT-PRINCIPAL header; App Service Easy Auth must be enabled.");
     }
 
-    private static bool TryReadEasyAuthPrincipal(HttpContext http, out ResolvedPrincipal principal)
+    internal static bool TryReadEasyAuthPrincipal(HttpContext http, out ResolvedPrincipal principal)
     {
         principal = default!;
 
@@ -135,60 +136,93 @@ public sealed class EasyAuthUserContext(
             return false;
         }
 
-        var json = Encoding.UTF8.GetString(decoded);
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-
-        if (!root.TryGetProperty("claims", out var claimsElement)
-            || claimsElement.ValueKind != JsonValueKind.Array)
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(decoded);
+        }
+        catch (JsonException)
         {
             return false;
         }
 
-        string? objectId = null;
-        string? email = null;
-        string? name = null;
-
-        foreach (var claim in claimsElement.EnumerateArray())
+        using (document)
         {
-            if (!claim.TryGetProperty("typ", out var typElement)
-                || !claim.TryGetProperty("val", out var valElement))
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("claims", out var claimsElement)
+                || claimsElement.ValueKind != JsonValueKind.Array)
             {
-                continue;
+                return false;
             }
 
-            var typ = typElement.GetString();
-            var val = valElement.GetString();
-            if (string.IsNullOrEmpty(typ) || string.IsNullOrEmpty(val))
+            var authenticationType = root.TryGetProperty("auth_typ", out var authTypeElement)
+                ? authTypeElement.GetString()
+                : null;
+            var provider = IdentityProviders.Normalize(authenticationType);
+            if (provider is null)
             {
-                continue;
+                return false;
             }
 
-            if (objectId is null && ObjectIdClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+            string? objectId = null;
+            string? subject = null;
+            string? issuer = null;
+            string? email = null;
+            string? name = null;
+
+            foreach (var claim in claimsElement.EnumerateArray())
             {
-                objectId = val;
+                if (!claim.TryGetProperty("typ", out var typElement)
+                    || !claim.TryGetProperty("val", out var valElement))
+                {
+                    continue;
+                }
+
+                var typ = typElement.GetString();
+                var val = valElement.GetString();
+                if (string.IsNullOrEmpty(typ) || string.IsNullOrEmpty(val))
+                {
+                    continue;
+                }
+
+                if (objectId is null && MicrosoftObjectIdClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+                {
+                    objectId = val;
+                }
+                else if (subject is null && SubjectClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+                {
+                    subject = val;
+                }
+                else if (issuer is null && IssuerClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+                {
+                    issuer = val;
+                }
+                else if (email is null && EmailClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+                {
+                    email = val;
+                }
+                else if (name is null && NameClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+                {
+                    name = val;
+                }
             }
-            else if (email is null && EmailClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
+
+            var stableSubject = provider == IdentityProviders.Microsoft ? objectId ?? subject : subject;
+            if (string.IsNullOrWhiteSpace(stableSubject))
             {
-                email = val;
+                return false;
             }
-            else if (name is null && NameClaimTypes.Contains(typ, StringComparer.OrdinalIgnoreCase))
-            {
-                name = val;
-            }
+
+            principal = new ResolvedPrincipal(
+                Provider: provider,
+                Subject: stableSubject,
+                Issuer: issuer ?? provider,
+                DisplayName: name ?? email ?? "Invited user",
+                Email: email ?? string.Empty,
+                PreferredLanguage: null);
+            return true;
         }
-
-        if (string.IsNullOrEmpty(objectId))
-        {
-            return false;
-        }
-
-        principal = new ResolvedPrincipal(
-            EntraObjectId: objectId,
-            DisplayName: name ?? email ?? objectId,
-            Email: email ?? string.Empty,
-            PreferredLanguage: null);
-        return true;
     }
 }
 

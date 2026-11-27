@@ -30,6 +30,9 @@ param deployerPrincipalId string
 @minLength(36)
 param appServicePrincipalId string
 
+@description('Use a private endpoint and disable public network access.')
+param enablePrivateNetworking bool = true
+
 var kvName = 'kv-${baseName}'
 
 // ---- Existing role definitions ----
@@ -66,9 +69,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     enablePurgeProtection: true
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     networkAcls: {
-      defaultAction: 'Deny'
+      defaultAction: enablePrivateNetworking ? 'Deny' : 'Allow'
       bypass: 'None'
       ipRules: []
       virtualNetworkRules: []

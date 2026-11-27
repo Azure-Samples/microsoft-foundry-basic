@@ -4,7 +4,6 @@ using chatui.Data;
 using chatui.Data.Entities;
 using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace chatui.Controllers;
 

@@ -9,7 +9,7 @@ namespace chatui.Controllers;
 
 [ApiController]
 [Route("api/me")]
-public class MeController(IUserContext userContext, TranslatorDbContext dbContext, IOptions<ChatApiOptions> options) : ControllerBase
+public class MeController(IUserContext userContext, IUserProfileStore profiles, IOptions<ChatApiOptions> options) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<MeResponse>> Get(CancellationToken cancellationToken)
@@ -28,8 +28,7 @@ public class MeController(IUserContext userContext, TranslatorDbContext dbContex
         if (!string.IsNullOrWhiteSpace(request.PreferredLanguage))
         {
             user.PreferredLanguage = request.PreferredLanguage!;
-            user.UpdatedAt = DateTimeOffset.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await profiles.UpdateAsync(user, cancellationToken).ConfigureAwait(false);
         }
 
         return Ok(ToResponse(user));

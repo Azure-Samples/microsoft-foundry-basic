@@ -20,6 +20,9 @@ param baseName string
 @minLength(4)
 param logAnalyticsWorkspaceName string
 
+@description('Use private endpoints and disable public network access.')
+param enablePrivateNetworking bool = true
+
 var speechName = contains(baseName, '-') ? 'speech-${baseName}' : 'speech${baseName}'
 
 // ---- Existing resources ----
@@ -44,7 +47,7 @@ resource speech 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   properties: {
     customSubDomainName: speechName
     disableLocalAuth: true
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
   }
 }
 

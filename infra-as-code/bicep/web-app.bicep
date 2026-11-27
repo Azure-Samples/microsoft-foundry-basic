@@ -45,22 +45,34 @@ param existingWebPubSubResourceName string
 @minLength(2)
 param existingKeyVaultUri string
 
-@description('FQDN of the existing PostgreSQL server, e.g. pg-xxxx.postgres.database.azure.com. App connects with Npgsql using an Entra token.')
-@minLength(2)
-param existingPostgresFqdn string
+@description('Azure Table Storage service endpoint.')
+param tableStorageEndpoint string
 
-@description('Application database name on the PostgreSQL server.')
-@minLength(1)
-param existingPostgresDatabase string
+@description('Table containing provider-aware user profiles.')
+param usersTableName string = 'users'
 
-@description('Optional: Entra ID application (client) ID used to enable App Service Easy Auth v2. Leave empty to skip Easy Auth wiring; you can configure it in the Portal or from a follow-up deployment once the app registration exists.')
-param entraAppClientId string = ''
+@description('Table containing explicit user invitations.')
+param userInvitesTableName string = 'userinvites'
 
-@description('Optional: allowed audience for Easy Auth tokens. Defaults to api://<entraAppClientId>. Only used when entraAppClientId is provided.')
-param entraAppAllowedAudience string = ''
+@description('Microsoft identity application client ID. The app registration must allow organizational and personal Microsoft accounts.')
+param microsoftClientId string = ''
+
+@description('Optional allowed audience for Microsoft identity tokens. Defaults to api://<microsoftClientId>.')
+param microsoftAllowedAudience string = ''
+
+@description('Google OAuth application client ID.')
+param googleClientId string = ''
+
+@description('Key Vault secret containing the Microsoft identity application client secret.')
+param microsoftClientSecretName string = 'microsoft-login-client-secret'
+
+@description('Key Vault secret containing the Google OAuth application client secret.')
+param googleClientSecretName string = 'google-login-client-secret'
 
 param trainingMemberObjectId string = ''
-param appServiceSubnetId string
+@description('Integrate App Service with the supplied virtual network subnet.')
+param enableVnetIntegration bool = true
+param appServiceSubnetId string = ''
 param aiAgentName string = 'translator-agent'
 param aiAgentVersion string = '1'
 
@@ -70,7 +82,15 @@ param existingAppServiceManagedIdentityName string
 
 // variables
 var appName = 'app-${baseName}'
-var enableEasyAuth = !empty(entraAppClientId)
+var enableEasyAuth = !empty(microsoftClientId) || !empty(googleClientId)
+var authProviderSettings = union(
+  empty(microsoftClientId) ? {} : {
+    MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: '@Microsoft.KeyVault(SecretUri=${existingKeyVaultUri}secrets/${microsoftClientSecretName})'
+  },
+  empty(googleClientId) ? {} : {
+    GOOGLE_PROVIDER_AUTHENTICATION_SECRET: '@Microsoft.KeyVault(SecretUri=${existingKeyVaultUri}secrets/${googleClientSecretName})'
+  }
+)
 
 // ---- Existing resources ----
 
@@ -206,7 +226,7 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
   properties: {
     enabled: true
     serverFarmId: appServicePlan.id
-    virtualNetworkSubnetId: appServiceSubnetId
+    virtualNetworkSubnetId: enableVnetIntegration ? appServiceSubnetId : null
     httpsOnly: true
     #disable-next-line BCP037 // This is a valid property, just not part of the schema https://github.com/Azure/bicep-types-az/issues/2204
     sshEnabled: false
@@ -233,7 +253,7 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
   @description('Default configuration for the web app.')
   resource appsettings 'config' = {
     name: 'appsettings'
-    properties: {
+    properties: union({
       APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights.properties.ConnectionString
       AZURE_CLIENT_ID: appServiceManagedIdentity.properties.clientId
       AZURE_TENANT_ID: subscription().tenantId
@@ -241,7 +261,6 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       DevAuth__Enabled: 'false'
       TrainingGuidedEnabled: 'true'
       TrainingMemberObjectIds__0: trainingMemberObjectId
-      MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: '@Microsoft.KeyVault(SecretUri=${existingKeyVaultUri}secrets/entra-login-client-secret)'
       ApplicationInsightsAgent_EXTENSION_VERSION: '~3'
       AIProjectEndpoint: foundry::project.properties.endpoints['AI Foundry API']
       AIAgentId: aiAgentName
@@ -258,14 +277,14 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
       KeyVault__JoinTokenSigningKeySecretName: 'join-token-signing-key'
       JoinToken__Audience: 'meeting-join'
       JoinToken__LifetimeHours: '24'
-      Postgres__Host: existingPostgresFqdn
-      Postgres__Database: existingPostgresDatabase
-      Postgres__Username: appServiceManagedIdentity.properties.clientId
+      TableStorage__Endpoint: tableStorageEndpoint
+      TableStorage__UsersTableName: usersTableName
+      TableStorage__UserInvitesTableName: userInvitesTableName
       XDT_MicrosoftApplicationInsights_Mode: 'Recommended'
-    }
+    }, authProviderSettings)
   }
 
-  @description('Enable App Service Easy Auth v2 with Entra ID. Only wired when an app-registration client ID is supplied.')
+  @description('Enable App Service Easy Auth v2 provider endpoints. The application keeps its login page public and authorizes protected routes itself.')
   resource authV2 'config' = if (enableEasyAuth) {
     name: 'authsettingsV2'
     properties: {
@@ -274,28 +293,42 @@ resource webApp 'Microsoft.Web/sites@2024-11-01' = {
         runtimeVersion: '~1'
       }
       globalValidation: {
-        requireAuthentication: true
-        unauthenticatedClientAction: 'RedirectToLoginPage'
-        redirectToProvider: 'azureactivedirectory'
+        requireAuthentication: false
+        unauthenticatedClientAction: 'AllowAnonymous'
       }
-      identityProviders: {
+      identityProviders: union(empty(microsoftClientId) ? {} : {
         azureActiveDirectory: {
           enabled: true
           registration: {
-            openIdIssuer: '${environment().authentication.loginEndpoint}${subscription().tenantId}/v2.0'
-            clientId: entraAppClientId
+            openIdIssuer: '${environment().authentication.loginEndpoint}common/v2.0'
+            clientId: microsoftClientId
             clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
           }
           validation: {
             allowedAudiences: [
-              empty(entraAppAllowedAudience) ? 'api://${entraAppClientId}' : entraAppAllowedAudience
+              empty(microsoftAllowedAudience) ? 'api://${microsoftClientId}' : microsoftAllowedAudience
             ]
           }
           login: {
             disableWWWAuthenticate: false
           }
         }
-      }
+      }, empty(googleClientId) ? {} : {
+        google: {
+          enabled: true
+          registration: {
+            clientId: googleClientId
+            clientSecretSettingName: 'GOOGLE_PROVIDER_AUTHENTICATION_SECRET'
+          }
+          login: {
+            scopes: [
+              'openid'
+              'profile'
+              'email'
+            ]
+          }
+        }
+      })
       login: {
         tokenStore: {
           enabled: true

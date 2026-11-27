@@ -3,7 +3,6 @@ using chatui.Data;
 using chatui.Data.Entities;
 using chatui.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace chatui.Controllers;
 
@@ -15,7 +14,7 @@ namespace chatui.Controllers;
 [Route("api/conversations")]
 public class ConversationsController(
     IUserContext userContext,
-    TranslatorDbContext dbContext,
+    IUserProfileStore profiles,
     TransientSessionStore sessions) : ControllerBase
 {
     [HttpGet]
@@ -50,9 +49,7 @@ public class ConversationsController(
             return BadRequest(new { error = "Cannot start a conversation with yourself." });
         }
 
-        var peer = await dbContext.Users
-            .FirstOrDefaultAsync(u => u.Id == request.PeerId, cancellationToken)
-            .ConfigureAwait(false);
+        var peer = await profiles.GetByIdAsync(request.PeerId, cancellationToken).ConfigureAwait(false);
         if (peer is null)
         {
             return NotFound(new { error = "Peer user not found." });

@@ -1,21 +1,18 @@
+extern alias AzureIdentity;
+
 using Microsoft.Extensions.Options;
 using Azure.AI.Projects;
 using Azure.Core;
-using Azure.Identity;
+using DefaultAzureCredential = AzureIdentity::Azure.Identity.DefaultAzureCredential;
+using ManagedIdentityCredential = AzureIdentity::Azure.Identity.ManagedIdentityCredential;
+using ManagedIdentityId = AzureIdentity::Azure.Identity.ManagedIdentityId;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using chatui.Auth;
 using chatui.Configuration;
 using chatui.Data;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
+using Azure.Data.Tables;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
-
-if (args is ["--initialize-database", var inputPath])
-{
-    await chatui.Data.DatabaseInitialization.RunAsync(inputPath);
-    return;
-}
 
 if (args is ["--initialize-services", var servicesInputPath])
 {
@@ -30,8 +27,8 @@ builder.Services.AddOptions<ChatApiOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddOptions<PostgresOptions>()
-    .Bind(builder.Configuration.GetSection(PostgresOptions.SectionName))
+builder.Services.AddOptions<TableStorageOptions>()
+    .Bind(builder.Configuration.GetSection(TableStorageOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -89,44 +86,14 @@ builder.Services.AddSingleton((provider) =>
 
 builder.Services.AddSingleton<FoundryAgentResolver>();
 
-// Npgsql data source whose password is a periodically-refreshed Entra ID access token
-// scoped to the Azure Database for PostgreSQL AAD audience. The Postgres server has
-// passwordAuth disabled and only accepts these tokens (see postgres.bicep).
-builder.Services.AddSingleton<NpgsqlDataSource>((provider) =>
+builder.Services.AddSingleton(provider =>
 {
-    var opts = provider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-    var credential = provider.GetRequiredService<TokenCredential>();
-
-    var connectionString = new NpgsqlConnectionStringBuilder
-    {
-        Host = opts.Host,
-        Port = opts.Port,
-        Database = opts.Database,
-        Username = opts.Username,
-        SslMode = SslMode.Require,
-        IncludeErrorDetail = true,
-    }.ToString();
-
-    var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-    dataSourceBuilder.UsePeriodicPasswordProvider(
-        async (settings, ct) =>
-        {
-            var context = new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]);
-            var accessToken = await credential.GetTokenAsync(context, ct).ConfigureAwait(false);
-            return accessToken.Token;
-        },
-        successRefreshInterval: TimeSpan.FromMinutes(50),
-        failureRefreshInterval: TimeSpan.FromSeconds(5));
-    dataSourceBuilder.UseVector();
-    return dataSourceBuilder.Build();
+    var tableOptions = provider.GetRequiredService<IOptions<TableStorageOptions>>().Value;
+    return new TableServiceClient(
+        new Uri(tableOptions.Endpoint),
+        provider.GetRequiredService<TokenCredential>());
 });
-
-builder.Services.AddDbContext<TranslatorDbContext>((provider, options) =>
-{
-    var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
-    options.UseNpgsql(dataSource, npg => npg.UseVector());
-    options.UseSnakeCaseNamingConvention();
-});
+builder.Services.AddSingleton<IUserProfileStore, TableUserProfileStore>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContext, EasyAuthUserContext>();

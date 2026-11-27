@@ -6,7 +6,8 @@ param foundryName string
 param speechName string
 param translatorName string
 param keyVaultName string
-param postgresName string
+param storageAccountName string
+param postgresName string = ''
 param webPubSubName string
 param applicationInsightsName string
 param logAnalyticsWorkspaceName string
@@ -40,6 +41,7 @@ resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
           privateEndpointNetworkPolicies: 'Disabled'
         }
       }
+
     ]
   }
 }
@@ -56,6 +58,7 @@ var zoneNames = [
   'privatelink.ods.opinsights.azure.com'
   'privatelink.agentsvc.azure-automation.net'
   'privatelink.blob.core.windows.net'
+  'privatelink.table.${environment().suffixes.storage}'
 ]
 
 resource zones 'Microsoft.Network/privateDnsZones@2024-06-01' = [for zoneName in zoneNames: {
@@ -111,7 +114,7 @@ resource logsScope 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07
   dependsOn: [insightsScope]
 }
 
-var endpoints = [
+var endpoints = concat([
   {
     name: 'foundry'
     resourceId: resourceId('Microsoft.CognitiveServices/accounts', foundryName)
@@ -137,12 +140,6 @@ var endpoints = [
     zoneIndexes: [3]
   }
   {
-    name: 'postgres'
-    resourceId: resourceId('Microsoft.DBforPostgreSQL/flexibleServers', postgresName)
-    groupId: 'postgresqlServer'
-    zoneIndexes: [4]
-  }
-  {
     name: 'pubsub'
     resourceId: resourceId('Microsoft.SignalRService/webPubSub', webPubSubName)
     groupId: 'webpubsub'
@@ -154,7 +151,20 @@ var endpoints = [
     groupId: 'azuremonitor'
     zoneIndexes: [6, 7, 8, 9, 10]
   }
-]
+  {
+    name: 'table'
+    resourceId: resourceId('Microsoft.Storage/storageAccounts', storageAccountName)
+    groupId: 'table'
+    zoneIndexes: [11]
+  }
+], empty(postgresName) ? [] : [
+  {
+    name: 'postgres'
+    resourceId: resourceId('Microsoft.DBforPostgreSQL/flexibleServers', postgresName)
+    groupId: 'postgresqlServer'
+    zoneIndexes: [4]
+  }
+])
 
 @batchSize(1)
 resource privateEndpoints 'Microsoft.Network/privateEndpoints@2024-05-01' = [for endpoint in endpoints: {

@@ -20,6 +20,9 @@ param baseName string
 @minLength(4)
 param logAnalyticsWorkspaceName string
 
+@description('Use a private endpoint and disable public network access.')
+param enablePrivateNetworking bool = true
+
 var wpsName = 'wps-${baseName}'
 
 // ---- Existing resources ----
@@ -44,7 +47,7 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
   }
   properties: {
     disableLocalAuth: true
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: enablePrivateNetworking ? 'Disabled' : 'Enabled'
     liveTraceConfiguration: {
       enabled: 'true'
       categories: [
@@ -61,7 +64,7 @@ resource webPubSub 'Microsoft.SignalRService/webPubSub@2024-03-01' = {
     networkACLs: {
       defaultAction: 'Allow'
       publicNetwork: {
-        deny: ['ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace']
+        deny: enablePrivateNetworking ? ['ServerConnection', 'ClientConnection', 'RESTAPI', 'Trace'] : []
       }
     }
   }
